@@ -3,7 +3,7 @@
 //  1 unit = 1 meter. All objects are seated on the ground (no floating).
 // ============================================================================
 import * as THREE from 'three';
-import { M, trackGeo } from './materials.js';
+import { M, trackGeo, disposables } from './materials.js';
 import { batchStatic } from './optimize.js';
 import { instantiate } from './assets.js';
 import {
@@ -26,6 +26,7 @@ export const env = {
   sun: null, hemi: null, rim: null, ambient: null,
   skyMat: null, fog: null, scene: null,
   sunLight: null, nightLights: [], // PointLights that turn on at night
+  envMaps: null,                    // { morning, noon, afternoon, night } PMREM textures
   timeKey: 'noon',
 };
 
@@ -407,60 +408,89 @@ function buildPond(parent, x, z, r) {
 //  SKY DOME + DAY/NIGHT
 // ---------------------------------------------------------------------------
 function buildSky(scene) {
-  const geo = trackGeo(new THREE.SphereGeometry(400, 32, 20));
-  const skyMat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false,
-    uniforms: {
-      top:    { value: new THREE.Color(0x7fa8c9) },
-      bottom: { value: new THREE.Color(0xdbe6ea) },
-      sunDir: { value: new THREE.Vector3(0.5, 0.6, 0.4) },
-      sunCol: { value: new THREE.Color(0xfff1d6) },
-      sunStrength: { value: 1.0 },
-    },
-    vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `
-      varying vec3 vP; uniform vec3 top; uniform vec3 bottom; uniform vec3 sunDir; uniform vec3 sunCol; uniform float sunStrength;
-      void main(){
-        vec3 dir = normalize(vP);
-        float h = clamp(dir.y*0.5+0.5, 0.0, 1.0);
-        vec3 col = mix(bottom, top, pow(h,0.9));
-        float d = max(dot(dir, normalize(sunDir)), 0.0);
-        col += sunCol * pow(d, 350.0) * 2.2 * sunStrength;      // sun disc
-        col += sunCol * pow(d, 8.0) * 0.25 * sunStrength;       // glow
-        gl_FragColor = vec4(col, 1.0);
-      }`,
+  // Vertex-coloured dome: uses MeshBasicMaterial so three's colour management
+  // and tone mapping apply correctly (unlike a raw ShaderMaterial).
+  const geo = trackGeo(new THREE.SphereGeometry(400, 40, 24));
+  const colors = new Float32Array(geo.attributes.position.count * 3);
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const mat = new THREE.MeshBasicMaterial({
+    vertexColors: true, side: THREE.BackSide, depthWrite: false, fog: false,
   });
-  const dome = new THREE.Mesh(geo, skyMat);
+  const dome = new THREE.Mesh(geo, mat);
   dome.name = 'skydome';
+  dome.frustumCulled = false;
   scene.add(dome);
-  return skyMat;
+
+  // sun / moon disc sprite (billboard, additive)
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const ctx = cv.getContext('2d');
+  const grd = ctx.createRadialGradient(64, 64, 2, 64, 64, 62);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.18, 'rgba(255,246,225,0.95)');
+  grd.addColorStop(0.42, 'rgba(255,220,170,0.35)');
+  grd.addColorStop(1, 'rgba(255,220,170,0)');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sunMat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false, depthTest: false,
+    blending: THREE.AdditiveBlending, fog: false,
+  });
+  const sun = new THREE.Sprite(sunMat);
+  sun.name = 'celestial';
+  sun.scale.set(46, 46, 1);
+  sun.renderOrder = -1;
+  scene.add(sun);
+
+  return {
+    dome, geo, mat,
+    sun, sunMat,
+    setColors(top, bottom, sunDir, sunCol, sunStrength, isNight = false) {
+      const cTop = new THREE.Color(top), cBot = new THREE.Color(bottom);
+      const pos = geo.attributes.position;
+      const col = geo.attributes.color;
+      const c = new THREE.Color();
+      for (let i = 0; i < pos.count; i++) {
+        const h = Math.max(0, Math.min(1, pos.getY(i) / 400 * 0.5 + 0.5));
+        c.copy(cBot).lerp(cTop, Math.pow(h, 0.9));
+        col.setXYZ(i, c.r, c.g, c.b);
+      }
+      col.needsUpdate = true;
+      // sun sprite position along direction
+      const dir = new THREE.Vector3(...sunDir).normalize();
+      sun.position.copy(dir).multiplyScalar(360);
+      sunMat.color.set(sunCol);
+      sunMat.opacity = sunStrength;
+      sun.scale.setScalar(isNight ? 30 : 46);
+    },
+  };
 }
 
 const TIME_PRESETS = {
   morning: {
-    label: '清晨', skyTop: 0xbdd0e0, skyBot: 0xf0e2c8, fog: 0xe8dcc4, fogNear: 55, fogFar: 200,
-    hemiSky: 0xcfe0ee, hemiGround: 0x7a6a50, hemiInt: 0.85,
+    label: '清晨', skyTop: 0x9fb6cf, skyBot: 0xf0dcc0, fog: 0xe2d4bc, fogNear: 90, fogFar: 300,
+    hemiSky: 0xcfe0ee, hemiGround: 0x7a6a50, hemiInt: 0.5,
     sunColor: 0xffe0b0, sunInt: 1.5, sunPos: [-60, 40, 50],
     ambient: 0x3a4a5a, ambientInt: 0.35,
     exposure: 1.0, nightAmount: 0.35,
   },
   noon: {
-    label: '正午', skyTop: 0x6f9fd0, skyBot: 0xdde8ee, fog: 0xc8d8e2, fogNear: 70, fogFar: 260,
-    hemiSky: 0xbfd4e8, hemiGround: 0x6b5a44, hemiInt: 1.0,
-    sunColor: 0xfff4dd, sunInt: 2.6, sunPos: [40, 80, 30],
-    ambient: 0x556270, ambientInt: 0.3,
-    exposure: 1.05, nightAmount: 0.0,
+    label: '正午', skyTop: 0x4f86c0, skyBot: 0xcfe0ea, fog: 0xc2d4e0, fogNear: 150, fogFar: 430,
+    hemiSky: 0xbfd4e8, hemiGround: 0x6b5a44, hemiInt: 0.5,
+    sunColor: 0xfff4dd, sunInt: 2.3, sunPos: [40, 80, 30],
+    ambient: 0x556270, ambientInt: 0.12,
+    exposure: 0.95, nightAmount: 0.0,
   },
   afternoon: {
-    label: '黄昏', skyTop: 0x9a86b0, skyBot: 0xf0b878, fog: 0xe0aa78, fogNear: 55, fogFar: 210,
-    hemiSky: 0xd8b898, hemiGround: 0x6a5040, hemiInt: 0.8,
+    label: '黄昏', skyTop: 0x8a6ea8, skyBot: 0xf0b070, fog: 0xddaa78, fogNear: 90, fogFar: 320,
+    hemiSky: 0xd8b898, hemiGround: 0x6a5040, hemiInt: 0.5,
     sunColor: 0xffb060, sunInt: 1.9, sunPos: [55, 26, -40],
     ambient: 0x4a3a48, ambientInt: 0.35,
     exposure: 1.02, nightAmount: 0.45,
   },
   night: {
-    label: '夜晚', skyTop: 0x111d33, skyBot: 0x243149, fog: 0x1a2438, fogNear: 45, fogFar: 190,
-    hemiSky: 0x3e5578, hemiGround: 0x201a24, hemiInt: 0.9,
+    label: '夜晚', skyTop: 0x0b1526, skyBot: 0x1e2b42, fog: 0x162034, fogNear: 80, fogFar: 300,
+    hemiSky: 0x3e5578, hemiGround: 0x201a24, hemiInt: 0.55,
     sunColor: 0xa9c2e8, sunInt: 0.85, sunPos: [-30, 70, -50], // moonlight
     ambient: 0x33465f, ambientInt: 0.9,
     exposure: 1.25, nightAmount: 1.0,
@@ -470,7 +500,8 @@ const TIME_PRESETS = {
 export function setupEnvironment(scene) {
   env.scene = scene;
   // sky
-  env.skyMat = buildSky(scene);
+  env.sky = buildSky(scene);
+  env.skyMat = null;
   env.skyDecor = buildSkyDecor(scene);
   scene.fog = new THREE.Fog(0xc8d8e2, 70, 260);
   env.fog = scene.fog;
@@ -511,11 +542,8 @@ export function applyTime(key, instant = true) {
   _curPreset = p;
   const m = M();
 
-  env.skyMat.uniforms.top.value.set(p.skyTop);
-  env.skyMat.uniforms.bottom.value.set(p.skyBot);
-  env.skyMat.uniforms.sunCol.value.set(p.sunColor);
-  env.skyMat.uniforms.sunDir.value.set(...p.sunPos).normalize();
-  env.skyMat.uniforms.sunStrength.value = key === 'night' ? 0.15 : 1.0;
+  env.sky.setColors(p.skyTop, p.skyBot, p.sunPos, p.sunColor,
+    key === 'night' ? 0.55 : 1.0, key === 'night');
 
   if (env.fog) { env.fog.color.set(p.fog); env.fog.near = p.fogNear; env.fog.far = p.fogFar; }
   env.scene.background = new THREE.Color(p.skyBot);
@@ -543,6 +571,15 @@ export function applyTime(key, instant = true) {
   // night point lights
   for (const L of env.nightLights) L.intensity = na * L.userData.baseIntensity;
 
+  // HDRI environment map (reflections + image based lighting)
+  if (env.envMaps && env.envMaps[key] && env.scene) {
+    env.scene.environment = env.envMaps[key];
+    const envInt = { morning: 0.5, noon: 0.35, afternoon: 0.55, night: 0.35 }[key] ?? 0.4;
+    for (const mat of disposables.materials) {
+      if ('envMapIntensity' in mat) mat.envMapIntensity = envInt;
+    }
+  }
+
   // sky decor: stars at night, clouds by day
   if (env.skyDecor) {
     env.skyDecor.starMat.opacity = Math.max(0, na * 1.2 - 0.15);
@@ -551,6 +588,15 @@ export function applyTime(key, instant = true) {
   }
 
   return p.label;
+}
+
+export function setEnvMaps(maps) {
+  env.envMaps = maps;
+  // cache materials that respond to env intensity
+  env._pbrMaterials = [];
+  try {
+    // M() is called later; collect lazily in applyTime instead
+  } catch(e) {}
 }
 
 export function getExposure() { return _curPreset ? _curPreset.exposure : 1.05; }
@@ -685,9 +731,9 @@ export function buildWorld(scene, assets = null) {
   const lightSpots = [[0,-1.5],[12,6],[-12,6],[12,-6],[-12,-6],[0,20],[0,-20],[0,34],[17,0]];
   for (let i = 0; i < lightSpots.length; i++) {
     const [x,z] = lightSpots[i];
-    const pl = new THREE.PointLight(0xffb060, 0, 40, 2.0);
+    const pl = new THREE.PointLight(0xffb060, 0, 30, 2.0);
     pl.position.set(x, 3.4, z);
-    pl.userData.baseIntensity = 22 + (i % 3) * 6;
+    pl.userData.baseIntensity = 9 + (i % 3) * 2.5;
     pl.castShadow = false;
     scene.add(pl);
     env.nightLights.push(pl);

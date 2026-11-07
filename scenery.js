@@ -85,7 +85,7 @@ export function makeFoliageMaterial(color, swayAmp = 0.12, swaySpeed = 1.0) {
 // Water: animated ripple normal via shader displacement + fresnel-ish tint
 export function makeWaterMaterial(color = 0x3f7288) {
   const mat = new THREE.MeshStandardMaterial({
-    color, roughness: 0.22, metalness: 0.15, transparent: true, opacity: 0.86,
+    color, roughness: 0.62, metalness: 0.02, transparent: true, opacity: 0.9, envMapIntensity: 0.18,
   });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = windUniforms.uTime;
@@ -512,7 +512,7 @@ export function buildSkyDecor(scene) {
   cloudTex.colorSpace = THREE.SRGBColorSpace;
 
   const cloudMat = new THREE.SpriteMaterial({
-    map: cloudTex, transparent: true, opacity: 0.55, depthWrite: false, fog: false,
+    map: cloudTex, transparent: true, opacity: 0.38, depthWrite: false, fog: false,
   });
   const clouds = new THREE.Group();
   clouds.name = 'clouds';
@@ -520,8 +520,8 @@ export function buildSkyDecor(scene) {
     const s = new THREE.Sprite(cloudMat);
     const a = Math.random() * Math.PI * 2;
     const rr = 90 + Math.random() * 160;
-    s.position.set(Math.cos(a) * rr, 70 + Math.random() * 70, Math.sin(a) * rr);
-    const sc = 36 + Math.random() * 60;
+    s.position.set(Math.cos(a) * rr, 95 + Math.random() * 60, Math.sin(a) * rr);
+    const sc = 16 + Math.random() * 26;
     s.scale.set(sc, sc * 0.45, 1);
     clouds.add(s);
   }

@@ -6,6 +6,24 @@ import * as THREE from 'three';
 
 export const disposables = { geometries: [], materials: [], textures: [] };
 
+// PBR texture sets injected from textures.js (ambientCG, CC0).
+let PBR = null;
+export function setPBRTextures(sets) {
+  PBR = sets;
+  if (_mat) { _mat = null; }   // force rebuild with real maps
+}
+
+// clone a map with its own repeat (textures are shared images)
+function pbrMap(setKey, kind, repeat = 2) {
+  if (!PBR || !PBR[setKey] || !PBR[setKey][kind]) return null;
+  const t = PBR[setKey][kind].clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat, repeat);
+  t.needsUpdate = true;
+  disposables.textures.push(t);
+  return t;
+}
+
 let _mat = null;
 export function trackGeo(g) { disposables.geometries.push(g); return g; }
 function trackTex(t) { disposables.textures.push(t); return t; }
@@ -152,20 +170,94 @@ export function M() {
 
   const plasterTex = plasterTexture();
   _mat = {
-    plaster:     std({ color: 0xffffff, roughness: 0.95, map: plasterTex }),
-    plasterWarm: std({ color: 0xfff2dd, roughness: 0.95, map: plasterTex }),
-    wood:        std({ color: 0xffffff, roughness: 0.8, map: woodTex }),
-    woodDark:    std({ color: 0xffffff, roughness: 0.85, map: woodDarkTex }),
-    woodRed:     std({ color: 0xffffff, roughness: 0.78, map: woodTex }),
-    roofBlue:    std({ color: 0xffffff, roughness: 0.55, metalness: 0.08, map: roofTexture('#5a7183', 3) }),
-    roofBrown:   std({ color: 0xffffff, roughness: 0.7, map: roofTexture('#7a5238', 3) }),
-    roofGrey:    std({ color: 0xffffff, roughness: 0.6, map: roofTexture('#6d757d', 3) }),
-    stone:       std({ color: 0xffffff, roughness: 0.95, map: stoneTex }),
-    stoneLt:     std({ color: 0xffffff, roughness: 0.95, map: stoneTex }),
-    stoneDk:     std({ color: 0xd8d2c6, roughness: 1.0, map: stoneTex }),
-    cobble:      std({ color: 0xd8d2c6, roughness: 1.0, map: stoneTex }),
-    roadStone:   std({ color: 0xffffff, roughness: 0.95, map: stoneRoadTex }),
-    wallStone:   std({ color: 0xffffff, roughness: 0.9, map: stoneWallTex }),
+    plaster:     std({
+      color: 0xffffff, roughness: 0.95,
+      map: pbrMap('plaster', 'color', 2) || plasterTex,
+      normalMap: pbrMap('plaster', 'normal', 2),
+      roughnessMap: pbrMap('plaster', 'rough', 2),
+      normalScale: new THREE.Vector2(0.5, 0.5),
+    }),
+    plasterWarm: std({
+      color: 0xfff2dd, roughness: 0.95,
+      map: pbrMap('plaster', 'color', 2) || plasterTex,
+      normalMap: pbrMap('plaster', 'normal', 2),
+      roughnessMap: pbrMap('plaster', 'rough', 2),
+      normalScale: new THREE.Vector2(0.5, 0.5),
+    }),
+    wood:        std({
+      color: 0xffffff, roughness: 0.75,
+      map: pbrMap('wood_plank', 'color', 2) || woodTex,
+      normalMap: pbrMap('wood_plank', 'normal', 2),
+      roughnessMap: pbrMap('wood_plank', 'rough', 2),
+    }),
+    woodDark:    std({
+      color: 0xc9a888, roughness: 0.8,
+      map: pbrMap('wood_plank', 'color', 2) || woodDarkTex,
+      normalMap: pbrMap('wood_plank', 'normal', 2),
+      roughnessMap: pbrMap('wood_plank', 'rough', 2),
+    }),
+    woodRed:     std({
+      color: 0xb2543f, roughness: 0.62,
+      map: pbrMap('wood_plank', 'color', 2) || woodTex,
+      normalMap: pbrMap('wood_plank', 'normal', 2),
+      roughnessMap: pbrMap('wood_plank', 'rough', 2),
+    }),
+    roofBlue:    std({
+      color: 0x64798a, roughness: 0.55, metalness: 0.12,
+      map: pbrMap('roof_tile', 'color', 3) || roofTexture('#5a7183', 3),
+      normalMap: pbrMap('roof_tile', 'normal', 3),
+      roughnessMap: pbrMap('roof_tile', 'rough', 3),
+      normalScale: new THREE.Vector2(1.1, 1.1),
+    }),
+    roofBrown:   std({
+      color: 0x8f6244, roughness: 0.68, metalness: 0.05,
+      map: pbrMap('roof_tile', 'color', 3) || roofTexture('#7a5238', 3),
+      normalMap: pbrMap('roof_tile', 'normal', 3),
+      roughnessMap: pbrMap('roof_tile', 'rough', 3),
+    }),
+    roofGrey:    std({
+      color: 0x778088, roughness: 0.6, metalness: 0.08,
+      map: pbrMap('roof_tile', 'color', 3) || roofTexture('#6d757d', 3),
+      normalMap: pbrMap('roof_tile', 'normal', 3),
+      roughnessMap: pbrMap('roof_tile', 'rough', 3),
+    }),
+    stone:       std({
+      color: 0xffffff, roughness: 0.9,
+      map: pbrMap('granite', 'color', 2) || stoneTex,
+      normalMap: pbrMap('granite', 'normal', 2),
+      roughnessMap: pbrMap('granite', 'rough', 2),
+    }),
+    stoneLt:     std({
+      color: 0xf2ece2, roughness: 0.9,
+      map: pbrMap('granite', 'color', 2) || stoneTex,
+      normalMap: pbrMap('granite', 'normal', 2),
+      roughnessMap: pbrMap('granite', 'rough', 2),
+    }),
+    stoneDk:     std({
+      color: 0xb9b2a6, roughness: 1.0,
+      map: pbrMap('granite', 'color', 2) || stoneTex,
+      normalMap: pbrMap('granite', 'normal', 2),
+      roughnessMap: pbrMap('granite', 'rough', 2),
+    }),
+    cobble:      std({
+      color: 0xd8d2c6, roughness: 0.85,
+      map: pbrMap('stone_paving', 'color', 4) || stoneTex,
+      normalMap: pbrMap('stone_paving', 'normal', 4),
+      roughnessMap: pbrMap('stone_paving', 'rough', 4),
+    }),
+    roadStone:   std({
+      color: 0xd6dade, roughness: 0.36, metalness: 0.14, envMapIntensity: 1.2,
+      map: pbrMap('stone_paving', 'color', 18) || stoneRoadTex,
+      normalMap: pbrMap('stone_paving', 'normal', 18),
+      roughnessMap: pbrMap('stone_paving', 'rough', 18),
+      normalScale: new THREE.Vector2(0.8, 0.8),
+    }),
+    wallStone:   std({
+      color: 0xb9bfc2, roughness: 0.82,
+      map: pbrMap('brick', 'color', 14) || stoneWallTex,
+      normalMap: pbrMap('brick', 'normal', 14),
+      roughnessMap: pbrMap('brick', 'rough', 14),
+    }),
     gold:        std({ color: 0xd8b25a, roughness: 0.35, metalness: 0.65 }),
     leaf:        std({ color: 0x5f8f4a, roughness: 0.92 }),
     leaf2:       std({ color: 0x496f36, roughness: 0.92 }),
@@ -174,7 +266,7 @@ export function M() {
     grass:       std({ color: 0x7aa855, roughness: 1.0 }),
     grassDark:   std({ color: 0xffffff, roughness: 1.0, map: grassTex }),
     dirt:        std({ color: 0x8a7355, roughness: 1.0 }),
-    water:       std({ color: 0x4e7f96, roughness: 0.15, metalness: 0.4, transparent: true, opacity: 0.9 }),
+    water:       std({ color: 0x2f5d72, roughness: 0.45, metalness: 0.05, transparent: true, opacity: 0.92, envMapIntensity: 0.22 }),
     skin:        std({ color: 0xd8a97f, roughness: 0.85 }),
     windowLit:   std({ color: 0x2a2016, emissive: 0xffb04a, emissiveIntensity: 0.0, roughness: 0.7 }),
     lantern:     std({ color: 0xd23b2b, emissive: 0xff5a2a, emissiveIntensity: 0.0, roughness: 0.5 }),

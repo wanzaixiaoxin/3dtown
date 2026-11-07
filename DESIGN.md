@@ -200,3 +200,15 @@
 - 新增 PBR 贴图建议来源：**ambientCG**（CC0）、**Poly Haven**（CC0）
 - 新增树木/山石优先程序化生成，保证风格统一与包体可控
 - 若引入新模型，统一记录到 CREDITS.md
+
+---
+
+## 九、实施进度
+
+### ✅ P0 已完成（本轮）
+- **PBR 材质**：从 ambientCG 下载 6 套 CC0 材质（石板/瓦/白灰墙/木板/花岗岩/青砖），已接入 albedo + normal + roughness，并按表面分配纹理密度（路面 18×、城墙 14×、建筑 2–3×）。
+- **HDRI 环境**：Poly Haven 4 张 CC0 天空（清晨/正午/黄昏/夜晚），PMREM 预滤波后按时辰切换 `scene.environment`，为瓦片、石材、水面提供真实反射。
+- **后期管线**：EffectComposer → SSAO（高画质）→ UnrealBloom → OutputPass(ACES) → 电影调色（饱和度/对比/冷暖分离/暗角/颗粒）→ FXAA。
+- **天空重制**：顶点色穹顶（正确参与色彩管理）+ 太阳/月亮 Sprite + 云层 + 星空。
+- **画质分档**：设置面板新增 高/中/低 三档（默认中：Bloom+调色；高：加 SSAO；低：仅调色）。
+- **夜景**：灯笼 Bloom 溢光、湿石板高光反射、星空、窗灯。

@@ -4,14 +4,17 @@
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { M, disposables } from './materials.js';
+import { M, disposables, setPBRTextures } from './materials.js';
 import {
   TOWN, colliders, ladders, world as worldRef,
   buildWorld, setupEnvironment, applyTime, getExposure, getTimeLabel, getNightAmount,
+  setEnvMaps,
 } from './world.js';
 import { spawnNPCs, updateNPCs, npcs } from './npc.js';
 import { updateWind, windUniforms } from './scenery.js';
 import { preloadAssets, mixers } from './assets.js';
+import { loadPBRTextures, loadHDRI } from './textures.js';
+import { createPost } from './postprocessing.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -28,6 +31,7 @@ const settings = {
   fov: 70,
   walkSpeed: 3.4,
   invertY: false,
+  quality: 'medium',
 };
 const SETTINGS_KEY = 'guzhen-settings-v2';
 function loadSettings() {
@@ -38,7 +42,7 @@ function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
 
-let renderer, scene, camera, clock, orbit, world;
+let renderer, scene, camera, clock, orbit, world, post;
 let pointerLocked = false;
 const keys = Object.create(null);
 let view = 'top';
@@ -71,12 +75,23 @@ async function init() {
 
   setupEnvironment(scene);       // lights + sky + fog
 
-  // Preload third-party FBX assets (Quaternius CC0) with progress
   const loadText = document.getElementById('loadText');
+  // 1) CC0 PBR textures (ambientCG) — must be ready before materials are built
+  try {
+    if (loadText) loadText.textContent = '正在载入 PBR 材质…';
+    const pbr = await loadPBRTextures(renderer);
+    setPBRTextures(pbr);
+    // 2) HDRI environments (Poly Haven) for image-based lighting / reflections
+    if (loadText) loadText.textContent = '正在载入天空环境…';
+    const envMaps = await loadHDRI(renderer);
+    setEnvMaps(envMaps);
+  } catch (e) { console.warn('PBR/HDRI load failed, using procedural fallback', e); }
+
+  // 3) Third-party FBX models (Quaternius CC0)
   let assets = null;
   try {
     assets = await preloadAssets((pct, key) => {
-      if (loadText) loadText.textContent = `正在载入素材… ${Math.round(pct * 100)}%`;
+      if (loadText) loadText.textContent = `正在载入模型… ${Math.round(pct * 100)}%`;
     });
   } catch (e) { console.warn('asset preload failed, falling back to procedural', e); }
 
@@ -88,6 +103,8 @@ async function init() {
 
   initOrbit();
   bindUI();
+  post = createPost(renderer, scene, camera, settings.quality);
+  post.setQuality(settings.quality);
   onResize();
   window.addEventListener('resize', onResize);
 
@@ -180,6 +197,20 @@ function bindUI() {
     spdVal.textContent = settings.walkSpeed.toFixed(1);
     saveSettings();
   });
+
+  // quality selector
+  const qbtns = document.querySelectorAll('[data-quality]');
+  const qval = document.getElementById('qualityVal');
+  function applyQuality(q) {
+    settings.quality = q;
+    if (post) post.setQuality(q);
+    qbtns.forEach(b => b.classList.toggle('active', b.dataset.quality === q));
+    const label = { high: '高', medium: '中', low: '低' }[q] || q;
+    if (qval) qval.textContent = label;
+    saveSettings();
+  }
+  qbtns.forEach(b => b.addEventListener('click', () => applyQuality(b.dataset.quality)));
+  applyQuality(settings.quality);
 
   const inv = document.getElementById('invertY');
   inv.checked = settings.invertY;
@@ -491,7 +522,8 @@ function animate() {
   mmFrame += dt;
   if (mmFrame > 0.066) { drawMinimap(); mmFrame = 0; }
 
-  renderer.render(scene, camera);
+  if (post) post.render(dt);
+  else renderer.render(scene, camera);
 }
 
 function onResize() {
@@ -499,6 +531,7 @@ function onResize() {
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h);
+  if (post) { post.setSize(w, h); }
 }
 
 // ===========================================================================
@@ -519,13 +552,12 @@ window.__disposeTown = function () {
 };
 
 // debug hook for automated verification
-window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); window.__wind = windUniforms; window.__town = { player, ladders, colliders, npcs, setView, applyTime, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
+window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); Object.defineProperty(window,'__post',{get:()=>post}); window.__wind = windUniforms; window.__setPost = (v)=>{ post = v; }; window.__town = { player, ladders, colliders, npcs, setView, applyTime, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
 
 // ===========================================================================
-try { init(); }
-catch (e) {
-  console.error(e);
+init().catch((e) => {
+  console.error('init failed:', e);
   const fb = document.getElementById('fallback'), ld = document.getElementById('loader');
   if (ld) ld.style.display = 'none';
   if (fb) fb.style.display = 'grid';
-}
+});

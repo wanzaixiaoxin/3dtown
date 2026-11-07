@@ -88,6 +88,9 @@
     -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
     background: var(--gold); cursor: pointer; box-shadow: 0 0 0 3px rgba(216,178,90,0.25);
   }
+  .qualitybar { display: flex; gap: 6px; }
+  .qualitybar .qbtn { flex: 1; padding: 6px 0; font-size: 12px; }
+  .qualitybar .qbtn.active { background: var(--jade); border-color: var(--jade); color: #eafff3; }
   .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; opacity: 0.8; margin-bottom: 12px; }
   .switch { position: relative; width: 40px; height: 22px; }
   .switch input { opacity: 0; width: 0; height: 0; }
@@ -181,6 +184,14 @@
       <div class="field">
         <label>行走速度 <b id="spdVal">3.4</b></label>
         <input type="range" id="spd" min="2" max="6" step="0.2" value="3.4" />
+      </div>
+      <div class="field">
+        <label>画质 <b id="qualityVal">高</b></label>
+        <div class="qualitybar">
+          <button class="btn qbtn active" data-quality="high">高</button>
+          <button class="btn qbtn" data-quality="medium">中</button>
+          <button class="btn qbtn" data-quality="low">低</button>
+        </div>
       </div>
       <div class="toggle-row">
         <span>反转 Y 轴</span>
