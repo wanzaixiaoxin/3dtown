@@ -1,0 +1,15 @@
+# macOS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# deps / logs
+node_modules/
+*.log
+
+# temp local test pages
+npctest.html
+fbxtest.html
+tmat.html
