@@ -13,7 +13,7 @@ import {
 import { spawnNPCs, updateNPCs, npcs } from './npc.js';
 import { updateWind, windUniforms } from './scenery.js';
 import { preloadAssets, mixers } from './assets.js';
-import { loadPBRTextures, loadHDRI } from './textures.js';
+import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -76,6 +76,7 @@ async function init() {
   setupEnvironment(scene);       // lights + sky + fog
 
   const loadText = document.getElementById('loadText');
+  const envMaps = {};            // time key -> PMREM environment texture
   // 1) CC0 PBR textures (ambientCG) — must be ready before materials are built
   try {
     if (loadText) loadText.textContent = '正在载入 PBR 材质…';
@@ -83,7 +84,9 @@ async function init() {
     setPBRTextures(pbr);
     // 2) HDRI environments (Poly Haven) for image-based lighting / reflections
     if (loadText) loadText.textContent = '正在载入天空环境…';
-    const envMaps = await loadHDRI(renderer);
+    // load only the current time-of-day HDRI first (fast first paint)
+    const first = await loadHDRIOne(renderer, currentTime);
+    if (first) envMaps[currentTime] = first;
     setEnvMaps(envMaps);
   } catch (e) { console.warn('PBR/HDRI load failed, using procedural fallback', e); }
 
@@ -113,6 +116,17 @@ async function init() {
   if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 600); }
 
   renderer.setAnimationLoop(animate);
+
+  // lazy-load the remaining HDRIs in the background
+  (async () => {
+    for (const key of Object.keys(HDRI_FILES)) {
+      if (envMaps[key]) continue;
+      const tex = await loadHDRIOne(renderer, key);
+      if (tex) envMaps[key] = tex;
+    }
+    // if the user switched time while loading, refresh the environment
+    applyTime(currentTime);
+  })();
 }
 
 function initRenderer() {

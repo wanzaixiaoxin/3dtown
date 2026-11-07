@@ -34,28 +34,38 @@ export async function loadPBRTextures(renderer, base = './assets/textures/') {
   return out;
 }
 
-// Load 4 HDRI environments, prefiltered through PMREM.
-export async function loadHDRI(renderer, base = './assets/hdri/') {
-  const rgbe = new RGBELoader();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  pmrem.compileEquirectangularShader();
-  const map = {
-    morning: 'spruit_sunrise.hdr',
-    noon: 'kloppenheim_06_puresky.hdr',
-    afternoon: 'sunset_jhbcentral.hdr',
-    night: 'dikhololo_night.hdr',
-  };
-  const out = {};
-  for (const [key, file] of Object.entries(map)) {
-    try {
-      const hdr = await rgbe.loadAsync(base + file);
-      hdr.mapping = THREE.EquirectangularReflectionMapping;
-      out[key] = pmrem.fromEquirectangular(hdr).texture;
-      hdr.dispose();
-    } catch (e) {
-      console.warn('HDRI load failed', key, e);
-    }
+export const HDRI_FILES = {
+  morning: 'spruit_sunrise.hdr',
+  noon: 'kloppenheim_06_puresky.hdr',
+  afternoon: 'sunset_jhbcentral.hdr',
+  night: 'dikhololo_night.hdr',
+};
+
+let _rgbe = null, _pmrem = null;
+
+// Load a single HDRI and prefilter it (PMREM kept alive for reuse).
+export async function loadHDRIOne(renderer, key, base = './assets/hdri/') {
+  const file = HDRI_FILES[key];
+  if (!file) return null;
+  try {
+    if (!_rgbe) _rgbe = new RGBELoader();
+    if (!_pmrem) { _pmrem = new THREE.PMREMGenerator(renderer); _pmrem.compileEquirectangularShader(); }
+    const hdr = await _rgbe.loadAsync(base + file);
+    hdr.mapping = THREE.EquirectangularReflectionMapping;
+    const tex = _pmrem.fromEquirectangular(hdr).texture;
+    hdr.dispose();
+    return tex;
+  } catch (e) {
+    console.warn('HDRI load failed', key, e);
+    return null;
   }
-  pmrem.dispose();
+}
+
+// Load all four (kept for completeness).
+export async function loadHDRI(renderer, base = './assets/hdri/') {
+  const out = {};
+  for (const key of Object.keys(HDRI_FILES)) {
+    out[key] = await loadHDRIOne(renderer, key, base);
+  }
   return out;
 }
