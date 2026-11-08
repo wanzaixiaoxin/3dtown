@@ -185,7 +185,7 @@ function getLeafTextures() {
 }
 
 // material for alpha-tested foliage cards, with wind sway
-function makeCardMaterial(map, { color = 0xffffff, alphaTest = 0.38, swayAmp = 0.14, swaySpeed = 1.0 } = {}) {
+function makeCardMaterial(map, { color = 0xffffff, alphaTest = 0.38, swayAmp = 0.14, swaySpeed = 1.0, anchor = 'bottom' } = {}) {
   const mat = new THREE.MeshStandardMaterial({
     map, color, alphaTest, transparent: false,
     side: THREE.DoubleSide, roughness: 0.95, metalness: 0.0,
@@ -202,10 +202,20 @@ function makeCardMaterial(map, { color = 0xffffff, alphaTest = 0.38, swayAmp = 0
         uniform float uSwayAmp; uniform float uSwaySpeed;
       `)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-        float w = sin(uTime * uSwaySpeed + position.x * 0.35 + position.z * 0.35);
-        float amp = uSwayAmp * uWindStrength * clamp(transformed.y + 1.2, 0.0, 3.0);
+        // bend amount 0 at the anchored edge, 1 at the free edge (uv based)
+        float bendT = ${anchor === 'top' ? '1.0 - clamp(uv.y, 0.0, 1.0)' : 'clamp(uv.y, 0.0, 1.0)'};
+        bendT = pow(bendT, 1.4);
+        #ifdef USE_INSTANCING
+          float ph = instanceMatrix[3].x * 0.85 + instanceMatrix[3].z * 1.15;
+        #else
+          float ph = position.x * 0.45 + position.z * 0.55;
+        #endif
+        float w = sin(uTime * uSwaySpeed + ph) * 0.62
+                + sin(uTime * uSwaySpeed * 2.3 + ph * 1.7) * 0.38;
+        float amp = uSwayAmp * uWindStrength * bendT;
         transformed.x += uWindDir.x * w * amp;
         transformed.z += uWindDir.y * w * amp;
+        transformed.y -= abs(w) * amp * 0.22;
       `);
   };
   mat.customProgramCacheKey = () => 'cardsway' + swayAmp + swaySpeed;
@@ -410,7 +420,7 @@ export function buildWillow(parent, x, z, scale = 1) {
     g.add(card);
   }
   // hanging willow strands (alpha cards)
-  const strandMat = makeCardMaterial(T.willow, { alphaTest: 0.28, swayAmp: 0.2, swaySpeed: 1.5 });
+  const strandMat = makeCardMaterial(T.willow, { alphaTest: 0.28, swayAmp: 0.22, swaySpeed: 1.5, anchor: 'top' });
   const strandGeo = trackGeo(new THREE.PlaneGeometry(1.5 * scale, 3.2 * scale));
   strandGeo.translate(0, -1.6 * scale, 0);
   for (let i = 0; i < 10; i++) {
@@ -449,7 +459,7 @@ export function buildRealTree(parent, x, z, scale = 1, kind = 'green') {
   }
 
   const tex = kind === 'blossom' ? T.blossom : (kind === 'dark' ? T.dark : T.leaf);
-  const mat = makeCardMaterial(tex, { alphaTest: 0.38, swayAmp: kind === 'blossom' ? 0.11 : 0.13, swaySpeed: 0.95 });
+  const mat = makeCardMaterial(tex, { alphaTest: 0.38, swayAmp: kind === 'blossom' ? 0.14 : 0.17, swaySpeed: 0.95 });
   const cardGeo = trackGeo(crossedCardGeometry(2.9 * scale, 2.4 * scale));
   const clusters = [
     [0, trunkH + 0.9 * scale, 0, 1.1],

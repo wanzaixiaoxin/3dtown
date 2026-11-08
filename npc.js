@@ -193,7 +193,7 @@ function poseBone(bones, rest, name, angle) {
 function applyGait(n, dt, moving, speed) {
   const isVillager = n.type === 'villager';
   const target = moving ? 1 : 0;
-  n.walkBlend += (target - n.walkBlend) * Math.min(1, dt * 8);
+  n.walkBlend += (target - n.walkBlend) * Math.min(1, dt * 12);
   const w = n.walkBlend;
 
   if (w < 0.01) {
@@ -216,6 +216,9 @@ function applyGait(n, dt, moving, speed) {
     poseBone(n.bones, n.rest, 'LowerLegR', -Math.max(0, -swOpp) * 0.95 * w);
     poseBone(n.bones, n.rest, 'UpperArmL', swOpp * 0.5 * w);
     poseBone(n.bones, n.rest, 'UpperArmR', sw * 0.5 * w);
+    // keep feet roughly level: counter-rotate ankle against thigh + shin
+    poseBone(n.bones, n.rest, 'FootL', -(sw * 0.62 + (-Math.max(0, -sw) * 0.95)) * 0.75 * w);
+    poseBone(n.bones, n.rest, 'FootR', -(swOpp * 0.62 + (-Math.max(0, -swOpp) * 0.95)) * 0.75 * w);
     n.group.position.y = Math.abs(Math.sin(ph)) * 0.035 * w;
   } else {
     // quadruped: diagonal gait (front-left with back-right)
@@ -252,11 +255,16 @@ export function updateNPCs(dt, nightAmount = 0) {
 
     tmp.copy(n.target).sub(n.pos); tmp.y = 0;
     const dist = tmp.length();
+    let desiredYaw = n.yaw;
     if (dist > 0.5) {
       tmp.normalize();
-      const sp = n.speed * (nightAmount > 0.5 ? 0.6 : 1);
+      desiredYaw = Math.atan2(tmp.x, tmp.z);
+      // turn in place first when the target is far off-axis
+      const dy0 = ((desiredYaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
+      const turnFactor = Math.abs(dy0) > 0.9 ? 0.15 : 1.0;
+      const sp = n.speed * (nightAmount > 0.5 ? 0.6 : 1) * turnFactor;
       n.vel.x = tmp.x * sp; n.vel.z = tmp.z * sp;
-      n.yaw = Math.atan2(tmp.x, tmp.z);
+      n.yaw = desiredYaw;
     } else {
       n.vel.multiplyScalar(0.8);
     }
@@ -285,7 +293,11 @@ export function updateNPCs(dt, nightAmount = 0) {
 
     // smooth rotate toward movement direction
     const dy = ((n.yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
-    n.group.rotation.y += dy * Math.min(1, dt * 8);
+    if (Math.abs(dy) > 0.7) {
+      n.group.rotation.y = n.yaw;       // snap: never walk sideways/backwards
+    } else {
+      n.group.rotation.y += dy * Math.min(1, dt * 14);
+    }
 
     // switch anim clip based on movement; sync playback speed to actual velocity
     const curSpeed = Math.hypot(n.vel.x, n.vel.z);

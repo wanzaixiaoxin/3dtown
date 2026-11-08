@@ -44,6 +44,7 @@ function saveSettings() {
 
 let renderer, scene, camera, clock, orbit, world, post;
 let pointerLocked = false;
+let skipMouse = 0;
 const keys = Object.create(null);
 let view = 'top';
 let running = false;
@@ -245,9 +246,11 @@ function bindUI() {
   });
   document.addEventListener('pointerlockchange', () => {
     pointerLocked = document.pointerLockElement === canvas;
+    if (pointerLocked) skipMouse = 12;   // swallow the lock-acquisition jump
   });
   document.addEventListener('mousemove', (e) => {
     if (view !== 'fp' || !pointerLocked) return;
+    if (skipMouse > 0) { skipMouse--; return; }
     const s = settings.sensitivity * 0.0022;
     player.yaw -= e.movementX * s;
     player.pitch += (settings.invertY ? 1 : -1) * e.movementY * s;
@@ -401,6 +404,11 @@ function updatePlayer(dt) {
   const accel = player.onGround ? 16 : 5;
   player.vel.x += (wish.x * speed - player.vel.x) * Math.min(1, accel * dt);
   player.vel.z += (wish.z * speed - player.vel.z) * Math.min(1, accel * dt);
+  // deadzone: kill tiny residual velocity so the camera never drifts on its own
+  if (!moving) {
+    if (Math.abs(player.vel.x) < 0.08) player.vel.x = 0;
+    if (Math.abs(player.vel.z) < 0.08) player.vel.z = 0;
+  }
 
   if (keys['Space'] && player.onGround) { player.vel.y = PLAYER.jumpSpeed; player.onGround = false; }
   player.vel.y -= PLAYER.gravity * dt;
