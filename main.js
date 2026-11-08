@@ -10,7 +10,7 @@ import {
   buildWorld, setupEnvironment, applyTime, getExposure, getTimeLabel, getNightAmount,
   setEnvMaps,
 } from './world.js';
-import { spawnNPCs, updateNPCs, npcs } from './npc.js';
+import { spawnNPCs, updateNPCs, npcs, applyGait } from './npc.js';
 import { updateWind, windUniforms, updateWaterfall } from './scenery.js';
 import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
@@ -575,7 +575,7 @@ window.__disposeTown = function () {
 };
 
 // debug hook for automated verification
-window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); Object.defineProperty(window,'__post',{get:()=>post}); window.__wind = windUniforms; window.__setPost = (v)=>{ post = v; }; window.__town = { player, ladders, colliders, npcs, setView, applyTime, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
+window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); Object.defineProperty(window,'__post',{get:()=>post}); window.__wind = windUniforms; window.__gait = applyGait; window.__setPost = (v)=>{ post = v; }; window.__town = { player, ladders, colliders, npcs, setView, applyTime, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
 
 // ===========================================================================
 init().catch((e) => {

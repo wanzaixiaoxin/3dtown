@@ -38,7 +38,7 @@ function convertMaterials(root) {
 
 // Load an FBX and return a normalized "template" group.
 // targetHeight: desired height in meters (null = keep relative). grounds at y=0.
-export function loadFBX(url, { targetHeight = null, targetFootprint = null, faceForward = true, feetScale = 1, charFacePlusX = false } = {}) {
+export function loadFBX(url, { targetHeight = null, targetFootprint = null, faceForward = true, feetScale = 1, charFacePlusX = false, fixFeetRig = false } = {}) {
   return new Promise((resolve, reject) => {
     loader.load(url, (obj) => {
       convertMaterials(obj);
@@ -51,7 +51,23 @@ export function loadFBX(url, { targetHeight = null, targetFootprint = null, face
         });
       }
       // Quaternius characters face +X; rotate the mesh root so it faces +Z.
-      if (charFacePlusX) obj.rotation.y = -Math.PI / 2;
+      if (charFacePlusX) obj.rotation.y = Math.PI;   // source model faces -Z; turn to +Z
+      // Some exports parent the foot bones to the armature root instead of the shin,
+      // so the feet do not follow the leg. Re-attach them to the shins, preserving
+      // the bind-pose world transform (no visual jump, mesh stays intact).
+      if (fixFeetRig) {
+        const bones = {};
+        obj.traverse((o) => { if (o.isBone) bones[o.name] = o; });
+        const pairs = [
+          ['FootL', 'LowerLegL'], ['FootR', 'LowerLegR'],
+          ['FrontFootL', 'FrontLowLegL'], ['FrontFootR', 'FrontLowLegR'],
+          ['BackFootL', 'BackLowLegL'], ['BackFootR', 'BackLowLegR'],
+        ];
+        for (const [footName, shinName] of pairs) {
+          const foot = bones[footName], shin = bones[shinName];
+          if (foot && shin && foot.parent !== shin) shin.attach(foot);
+        }
+      }
       // compute bbox
       let box = new THREE.Box3().setFromObject(obj);
       let size = box.getSize(new THREE.Vector3());
@@ -94,14 +110,14 @@ export async function preloadAssets(onProgress) {
     windmill:    { file: 'Windmill.fbx', targetHeight: 8.0 },
     barn:        { file: 'Barn.fbx', targetHeight: 4.5 },
     coop:        { file: 'ChickenCoop.fbx', targetHeight: 2.0 },
-    cow:         { file: 'Cow.fbx', targetHeight: 1.6, charFacePlusX: true },
-    horse:       { file: 'Horse.fbx', targetHeight: 2.1, charFacePlusX: true },
-    sheep:       { file: 'Sheep.fbx', targetHeight: 1.2, charFacePlusX: true },
-    pig:         { file: 'Pig.fbx', targetHeight: 0.9, charFacePlusX: true },
-    pug:         { file: 'Pug.fbx', targetHeight: 0.5, charFacePlusX: true },
-    fox:         { file: 'animal_fox.fbx', targetHeight: 0.8, charFacePlusX: true },
+    cow:         { file: 'Cow.fbx', targetHeight: 1.6, charFacePlusX: true, fixFeetRig: true },
+    horse:       { file: 'Horse.fbx', targetHeight: 2.1, charFacePlusX: true, fixFeetRig: true },
+    sheep:       { file: 'Sheep.fbx', targetHeight: 1.2, charFacePlusX: true, fixFeetRig: true },
+    pig:         { file: 'Pig.fbx', targetHeight: 0.9, charFacePlusX: true, fixFeetRig: true },
+    pug:         { file: 'Pug.fbx', targetHeight: 0.5, charFacePlusX: true, fixFeetRig: true },
+    fox:         { file: 'animal_fox.fbx', targetHeight: 0.8, charFacePlusX: true, fixFeetRig: true },
     bird:        { file: 'animal_bird.fbx', targetHeight: 0.4, charFacePlusX: true },
-    manA:        { file: 'char_male_casual.fbx', targetHeight: 1.75, feetScale: 0.8, charFacePlusX: true },
+    manA:        { file: 'char_male_casual.fbx', targetHeight: 1.75, charFacePlusX: true, fixFeetRig: true },
     manB:        { file: 'char_male_longsleeve.fbx', targetHeight: 1.75, feetScale: 0.8, charFacePlusX: true },
     woman:       { file: 'char_female_casual.fbx', targetHeight: 1.68, feetScale: 0.8, charFacePlusX: true },
   };

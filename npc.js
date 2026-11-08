@@ -69,6 +69,9 @@ function addNPC(instance, opts) {
   }
   npc.walkPhase = Math.random() * Math.PI * 2;
   npc.walkBlend = 0;
+  instance.updateMatrixWorld(true);
+  npc.footAxisL = computeFootPitchAxis(bones['FootL']);
+  npc.footAxisR = computeFootPitchAxis(bones['FootR']);
 
   let idle = playClip(instance, npc.idleClip || 'Idle', { speed: 0.9, register: false });
   if (!idle && instance.animations && instance.animations.length) {
@@ -188,9 +191,25 @@ function poseBone(bones, rest, name, angle) {
   b.quaternion.multiply(_qTmp.setFromAxisAngle(_xAxis, angle));
 }
 
+function poseBoneAxis(bones, rest, name, axis, angle) {
+  const b = bones[name];
+  if (!b || !axis) return;
+  const r = rest[name];
+  if (r) b.quaternion.copy(r);
+  b.quaternion.multiply(_qTmp.setFromAxisAngle(axis, angle));
+}
+
+// the foot bone's local axis that corresponds to the character's side axis
+function computeFootPitchAxis(footBone) {
+  if (!footBone) return null;
+  const q = new THREE.Quaternion();
+  footBone.getWorldQuaternion(q);
+  return new THREE.Vector3(1, 0, 0).applyQuaternion(q.invert()).normalize();
+}
+
 // Procedural walk cycle overlay: the FBX walk clips have very small leg swing,
 // so we drive thighs/shins/arms directly to get a readable, non-sliding gait.
-function applyGait(n, dt, moving, speed) {
+export function applyGait(n, dt, moving, speed) {
   const isVillager = n.type === 'villager';
   const target = moving ? 1 : 0;
   n.walkBlend += (target - n.walkBlend) * Math.min(1, dt * 12);
@@ -210,16 +229,27 @@ function applyGait(n, dt, moving, speed) {
   const swOpp = Math.sin(ph + Math.PI);
 
   if (isVillager) {
-    poseBone(n.bones, n.rest, 'UpperLegL', sw * 0.62 * w);
-    poseBone(n.bones, n.rest, 'UpperLegR', swOpp * 0.62 * w);
-    poseBone(n.bones, n.rest, 'LowerLegL', -Math.max(0, -sw) * 0.95 * w);
-    poseBone(n.bones, n.rest, 'LowerLegR', -Math.max(0, -swOpp) * 0.95 * w);
-    poseBone(n.bones, n.rest, 'UpperArmL', swOpp * 0.5 * w);
-    poseBone(n.bones, n.rest, 'UpperArmR', sw * 0.5 * w);
-    // keep feet roughly level: counter-rotate ankle against thigh + shin
-    poseBone(n.bones, n.rest, 'FootL', -(sw * 0.62 + (-Math.max(0, -sw) * 0.95)) * 0.75 * w);
-    poseBone(n.bones, n.rest, 'FootR', -(swOpp * 0.62 + (-Math.max(0, -swOpp) * 0.95)) * 0.75 * w);
-    n.group.position.y = Math.abs(Math.sin(ph)) * 0.035 * w;
+    // natural walking amplitude (previous values made a "splits" pose)
+    const thighAmp = 0.40;
+    const thighL = sw * thighAmp * w;
+    const thighR = swOpp * thighAmp * w;
+    poseBone(n.bones, n.rest, 'UpperLegL', thighL);
+    poseBone(n.bones, n.rest, 'UpperLegR', thighR);
+    // knee flexes during the swing phase (never hyper-extends)
+    const kneeL = Math.max(0, Math.cos(ph)) * 0.85 * w;
+    const kneeR = Math.max(0, Math.cos(ph + Math.PI)) * 0.85 * w;
+    poseBone(n.bones, n.rest, 'LowerLegL', -kneeL);
+    poseBone(n.bones, n.rest, 'LowerLegR', -kneeR);
+    // ankle keeps the sole roughly level
+    poseBoneAxis(n.bones, n.rest, 'FootL', n.footAxisL, -(thighL - kneeL) * 0.55);
+    poseBoneAxis(n.bones, n.rest, 'FootR', n.footAxisR, -(thighR - kneeR) * 0.55);
+    // arms swing opposite to the legs
+    poseBone(n.bones, n.rest, 'UpperArmL', swOpp * 0.30 * w);
+    poseBone(n.bones, n.rest, 'UpperArmR', sw * 0.30 * w);
+    // subtle vertical bob, twice per cycle (one per step)
+    n.group.position.y = Math.abs(Math.sin(ph)) * 0.018 * w;
+    if (n.bones.FootL) n.bones.FootL.scale.setScalar(0.86);
+    if (n.bones.FootR) n.bones.FootR.scale.setScalar(0.86);
   } else {
     // quadruped: diagonal gait (front-left with back-right)
     poseBone(n.bones, n.rest, 'FrontUpLegL', sw * 0.5 * w);
