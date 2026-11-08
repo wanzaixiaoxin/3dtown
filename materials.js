@@ -246,7 +246,7 @@ export function M() {
       roughnessMap: pbrMap('stone_paving', 'rough', 4),
     }),
     roadStone:   std({
-      color: 0xd6dade, roughness: 0.36, metalness: 0.14, envMapIntensity: 1.2,
+      color: 0xd6dade, roughness: 0.92, metalness: 0.03, envMapIntensity: 0.35,
       map: pbrMap('stone_paving', 'color', 18) || stoneRoadTex,
       normalMap: pbrMap('stone_paving', 'normal', 18),
       roughnessMap: pbrMap('stone_paving', 'rough', 18),
@@ -266,7 +266,7 @@ export function M() {
     grass:       std({ color: 0x7aa855, roughness: 1.0 }),
     grassDark:   std({ color: 0xffffff, roughness: 1.0, map: grassTex }),
     dirt:        std({ color: 0x8a7355, roughness: 1.0 }),
-    water:       std({ color: 0x2f5d72, roughness: 0.45, metalness: 0.05, transparent: true, opacity: 0.92, envMapIntensity: 0.22 }),
+    water:       std({ color: 0x2f5d72, roughness: 0.9, metalness: 0.0, transparent: true, opacity: 0.93, envMapIntensity: 0.08 }),
     skin:        std({ color: 0xd8a97f, roughness: 0.85 }),
     windowLit:   std({ color: 0x2a2016, emissive: 0xffb04a, emissiveIntensity: 0.0, roughness: 0.7 }),
     lantern:     std({ color: 0xd23b2b, emissive: 0xff5a2a, emissiveIntensity: 0.0, roughness: 0.5 }),

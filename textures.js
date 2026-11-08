@@ -23,14 +23,15 @@ export async function loadPBRTextures(renderer, base = './assets/textures/') {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 4);
   const sets = ['stone_paving', 'roof_tile', 'plaster', 'wood_plank', 'granite', 'brick'];
   const out = {};
-  await Promise.all(sets.map(async (key) => {
+  // sequential per set (3 maps in parallel inside) — avoids server connection resets
+  for (const key of sets) {
     const [color, normal, rough] = await Promise.all([
       loadTex(`${base}${key}_color.jpg`, THREE.SRGBColorSpace, aniso),
       loadTex(`${base}${key}_normal.jpg`, THREE.NoColorSpace, aniso),
       loadTex(`${base}${key}_roughness.jpg`, THREE.NoColorSpace, aniso),
     ]);
     if (color) out[key] = { color, normal, rough };
-  }));
+  }
   return out;
 }
 

@@ -187,7 +187,7 @@ function buildHouse(parent, x, z, w, d, h, opts = {}) {
   for (const side of [1, -1]) {
     const panel = new THREE.Mesh(panelGeo, roofMat);
     panel.position.set(0, baseH + bodyH + roofH / 2, side * (d / 4 + overhang / 2));
-    panel.rotation.x = -side * roofAngle;
+    panel.rotation.x = side * roofAngle;
     panel.castShadow = panel.receiveShadow = true;
     g.add(panel);
   }
@@ -460,7 +460,7 @@ function buildSky(scene) {
       const dir = new THREE.Vector3(...sunDir).normalize();
       sun.position.copy(dir).multiplyScalar(360);
       sunMat.color.set(sunCol);
-      sunMat.opacity = sunStrength;
+      sunMat.opacity = sunStrength * 0.75;
       sun.scale.setScalar(isNight ? 30 : 46);
     },
   };
@@ -479,7 +479,7 @@ const TIME_PRESETS = {
     hemiSky: 0xbfd4e8, hemiGround: 0x6b5a44, hemiInt: 0.5,
     sunColor: 0xfff4dd, sunInt: 2.3, sunPos: [40, 80, 30],
     ambient: 0x556270, ambientInt: 0.12,
-    exposure: 0.95, nightAmount: 0.0,
+    exposure: 0.9, nightAmount: 0.0,
   },
   afternoon: {
     label: '黄昏', skyTop: 0x8a6ea8, skyBot: 0xf0b070, fog: 0xddaa78, fogNear: 90, fogFar: 320,

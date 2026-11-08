@@ -109,19 +109,26 @@ export async function preloadAssets(onProgress) {
   const keys = Object.keys(spec);
   const out = {};
   let done = 0;
-  await Promise.all(keys.map(async (k) => {
-    const s = spec[k];
-    try {
-      const tpl = await loadFBX(base + s.file, s);
-      out[k] = tpl;
-    } catch (e) {
-      console.warn('asset load failed', k, e);
-      out[k] = null;
-    } finally {
-      done++;
-      onProgress?.(done / keys.length, k);
+  // limited concurrency (avoids connection resets on simple static servers)
+  const CONCURRENCY = 3;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < keys.length) {
+      const k = keys[cursor++];
+      const s = spec[k];
+      try {
+        out[k] = await loadFBX(base + s.file, s);
+      } catch (e) {
+        // one retry
+        try { out[k] = await loadFBX(base + s.file, s); }
+        catch (e2) { console.warn('asset load failed', k, e2); out[k] = null; }
+      } finally {
+        done++;
+        onProgress?.(done / keys.length, k);
+      }
     }
-  }));
+  }
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   return out;
 }
 

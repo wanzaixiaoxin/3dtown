@@ -57,6 +57,19 @@ function addNPC(instance, opts) {
     size: instance.userData.size,
   };
   // start with idle
+  // bone map + rest pose (for procedural gait overlay)
+  const bones = {};
+  instance.traverse((o) => { if (o.isBone) bones[o.name] = o; });
+  npc.bones = bones;
+  npc.rest = {};
+  const animatedBones = ['UpperLegL','UpperLegR','LowerLegL','LowerLegR','UpperArmL','UpperArmR',
+    'FrontUpLegL','FrontUpLegR','FrontLowLegL','FrontLowLegR','BackUpLegL','BackUpLegR','BackLowLegL','BackLowLegR'];
+  for (const name of animatedBones) {
+    if (bones[name]) npc.rest[name] = bones[name].quaternion.clone();
+  }
+  npc.walkPhase = Math.random() * Math.PI * 2;
+  npc.walkBlend = 0;
+
   let idle = playClip(instance, npc.idleClip || 'Idle', { speed: 0.9, register: false });
   if (!idle && instance.animations && instance.animations.length) {
     idle = playClip(instance, instance.animations[0].name, { speed: 0.9, register: false });
@@ -124,7 +137,7 @@ export function spawnNPCs(s, assets) {
     if (!inst) return;
     addNPC(inst, {
       type: 'villager', x, z,
-      speed: 1.2 + Math.random() * 0.8,
+      speed: 1.0 + Math.random() * 0.35,
       radius: 6 + Math.random() * 4,
       walkClip: 'Walk', idleClip: 'Idle',
     });
@@ -141,7 +154,7 @@ export function spawnNPCs(s, assets) {
     if (!inst) return;
     addNPC(inst, {
       type: 'animal', x, z,
-      speed: 0.9 + Math.random() * 0.5,
+      speed: 0.75 + Math.random() * 0.3,
       radius: 5 + Math.random() * 4,
       walkClip: 'Walk', idleClip: 'Idle',
     });
@@ -155,13 +168,67 @@ export function spawnNPCs(s, assets) {
     if (!inst) return;
     addNPC(inst, {
       type: 'animal', x, z,
-      speed: 1.8 + Math.random() * 0.8,
+      speed: 1.4 + Math.random() * 0.5,
       radius: 7 + Math.random() * 5,
       walkClip: 'Walk', idleClip: 'Idle',
     });
   });
 
   return npcs;
+}
+
+const _qTmp = new THREE.Quaternion();
+const _xAxis = new THREE.Vector3(1, 0, 0);
+
+function poseBone(bones, rest, name, angle) {
+  const b = bones[name];
+  if (!b) return;
+  const r = rest[name];
+  if (r) b.quaternion.copy(r);
+  b.quaternion.multiply(_qTmp.setFromAxisAngle(_xAxis, angle));
+}
+
+// Procedural walk cycle overlay: the FBX walk clips have very small leg swing,
+// so we drive thighs/shins/arms directly to get a readable, non-sliding gait.
+function applyGait(n, dt, moving, speed) {
+  const isVillager = n.type === 'villager';
+  const target = moving ? 1 : 0;
+  n.walkBlend += (target - n.walkBlend) * Math.min(1, dt * 8);
+  const w = n.walkBlend;
+
+  if (w < 0.01) {
+    // restore rest pose when idle
+    for (const name in n.rest) n.bones[name].quaternion.copy(n.rest[name]);
+    n.group.position.y = 0;
+    return;
+  }
+
+  // stride frequency tied to actual speed (rad/s)
+  n.walkPhase += dt * (2.6 + speed * 3.4);
+  const ph = n.walkPhase;
+  const sw = Math.sin(ph);
+  const swOpp = Math.sin(ph + Math.PI);
+
+  if (isVillager) {
+    poseBone(n.bones, n.rest, 'UpperLegL', sw * 0.62 * w);
+    poseBone(n.bones, n.rest, 'UpperLegR', swOpp * 0.62 * w);
+    poseBone(n.bones, n.rest, 'LowerLegL', -Math.max(0, -sw) * 0.95 * w);
+    poseBone(n.bones, n.rest, 'LowerLegR', -Math.max(0, -swOpp) * 0.95 * w);
+    poseBone(n.bones, n.rest, 'UpperArmL', swOpp * 0.5 * w);
+    poseBone(n.bones, n.rest, 'UpperArmR', sw * 0.5 * w);
+    n.group.position.y = Math.abs(Math.sin(ph)) * 0.035 * w;
+  } else {
+    // quadruped: diagonal gait (front-left with back-right)
+    poseBone(n.bones, n.rest, 'FrontUpLegL', sw * 0.5 * w);
+    poseBone(n.bones, n.rest, 'FrontUpLegR', swOpp * 0.5 * w);
+    poseBone(n.bones, n.rest, 'BackUpLegL', swOpp * 0.48 * w);
+    poseBone(n.bones, n.rest, 'BackUpLegR', sw * 0.48 * w);
+    poseBone(n.bones, n.rest, 'FrontLowLegL', -Math.max(0, -sw) * 0.6 * w);
+    poseBone(n.bones, n.rest, 'FrontLowLegR', -Math.max(0, -swOpp) * 0.6 * w);
+    poseBone(n.bones, n.rest, 'BackLowLegL', -Math.max(0, -swOpp) * 0.6 * w);
+    poseBone(n.bones, n.rest, 'BackLowLegR', -Math.max(0, -sw) * 0.6 * w);
+    n.group.position.y = Math.abs(Math.sin(ph * 2)) * 0.02 * w;
+  }
 }
 
 export function updateNPCs(dt, nightAmount = 0) {
@@ -231,12 +298,8 @@ export function updateNPCs(dt, nightAmount = 0) {
       switchClip(n, n.idleClip, 1.0);
     }
 
-    // ground clamp: keep the lowest foot at/above ground so nobody sinks
-    if (n.group.userData.size) {
-      // approximate: model is grounded at y=0 in rest; walk pose may dip slightly,
-      // add a tiny lift while moving so feet visually touch the ground
-      n.group.position.y = nowMoving ? 0.02 : 0;
-    }
+    // procedural gait overlay (legs bend & arms swing, no foot sliding)
+    applyGait(n, dt, nowMoving, curSpeed);
   }
 }
 

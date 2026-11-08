@@ -85,7 +85,7 @@ export function makeFoliageMaterial(color, swayAmp = 0.12, swaySpeed = 1.0) {
 // Water: animated ripple normal via shader displacement + fresnel-ish tint
 export function makeWaterMaterial(color = 0x3f7288) {
   const mat = new THREE.MeshStandardMaterial({
-    color, roughness: 0.62, metalness: 0.02, transparent: true, opacity: 0.9, envMapIntensity: 0.18,
+    color, roughness: 0.92, metalness: 0.0, transparent: true, opacity: 0.93, envMapIntensity: 0.06,
   });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = windUniforms.uTime;
