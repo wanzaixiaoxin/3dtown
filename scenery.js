@@ -790,3 +790,292 @@ export function buildSkyDecor(scene) {
   scene.add(group);
   return { stars, starMat, cloudMat, clouds };
 }
+
+// ===========================================================================
+//  PINE TREE (松) — layered textured needle cards in a conical silhouette
+// ===========================================================================
+let _pineTex = null;
+function getPineTexture() {
+  if (_pineTex) return _pineTex;
+  _pineTex = canvasTexture(512, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    // needle strokes radiating from a central branch
+    for (let b = 0; b < 14; b++) {
+      const y = S * (0.12 + b * 0.06);
+      ctx.strokeStyle = 'hsla(120,22%,22%,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(S * 0.1, y); ctx.lineTo(S * 0.9, y + 4); ctx.stroke();
+      for (let i = 0; i < 90; i++) {
+        const t = Math.random();
+        const x = S * 0.1 + t * S * 0.8;
+        const len = 10 + Math.random() * 18;
+        const ang = (Math.random() - 0.5) * 0.9;
+        ctx.strokeStyle = `hsla(${118 + Math.random() * 24},${26 + Math.random() * 18}%,${18 + Math.random() * 18}%,0.95)`;
+        ctx.lineWidth = 1 + Math.random();
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + Math.sin(ang) * len, y + Math.cos(ang) * len * 0.6);
+        ctx.stroke();
+      }
+    }
+  });
+  return _pineTex;
+}
+
+export function buildPine(parent, x, z, scale = 1) {
+  const m = M();
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  const trunkH = 3.4 * scale;
+  const trunk = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.14 * scale, 0.26 * scale, trunkH, 8)), m.trunk);
+  trunk.position.y = trunkH / 2; trunk.castShadow = true; g.add(trunk);
+
+  const mat = makeCardMaterial(getPineTexture(), { alphaTest: 0.3, swayAmp: 0.08, swaySpeed: 0.7 });
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4;
+    const w = (3.4 - t * 2.2) * scale;
+    const h = (1.5 - t * 0.5) * scale;
+    const card = new THREE.Mesh(trackGeo(crossedCardGeometry(w, h)), mat);
+    card.position.y = trunkH * (0.55 + t * 0.42);
+    card.rotation.y = Math.random() * Math.PI;
+    card.castShadow = true;
+    g.add(card);
+  }
+  parent.add(g);
+  colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 0.35, maxZ: z + 0.35, top: trunkH, kind: 'tree' });
+  return g;
+}
+
+// ===========================================================================
+//  BAMBOO GROVE (竹)
+// ===========================================================================
+let _bambooLeafTex = null;
+function getBambooLeafTexture() {
+  if (_bambooLeafTex) return _bambooLeafTex;
+  _bambooLeafTex = canvasTexture(256, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    for (let i = 0; i < 70; i++) {
+      const x = S * (0.15 + Math.random() * 0.7);
+      const y = S * (0.1 + Math.random() * 0.8);
+      const w = 6 + Math.random() * 12;
+      const h = 1.6 + Math.random() * 2.6;
+      ctx.save(); ctx.translate(x, y); ctx.rotate((Math.random() - 0.5) * 2.2);
+      ctx.beginPath(); ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${96 + Math.random() * 26},${40 + Math.random() * 20}%,${30 + Math.random() * 20}%,0.95)`;
+      ctx.fill(); ctx.restore();
+    }
+  });
+  return _bambooLeafTex;
+}
+
+export function buildBamboo(parent, x, z, count = 9, scale = 1) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  const stalkMat = new THREE.MeshStandardMaterial({ color: 0x6f8f4a, roughness: 0.8 });
+  const leafMat = makeCardMaterial(getBambooLeafTexture(), { alphaTest: 0.3, swayAmp: 0.16, swaySpeed: 1.1 });
+  for (let i = 0; i < count; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * 1.8 * scale;
+    const sx = Math.cos(a) * r, sz = Math.sin(a) * r;
+    const h = (4.5 + Math.random() * 3.5) * scale;
+    const stalk = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.045 * scale, 0.07 * scale, h, 5)), stalkMat);
+    stalk.position.set(sx, h / 2, sz);
+    stalk.rotation.z = (Math.random() - 0.5) * 0.08;
+    stalk.castShadow = true; g.add(stalk);
+    // node rings
+    for (let k = 1; k < 4; k++) {
+      const ring = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(0.055 * scale, 0.012 * scale, 4, 8)), stalkMat);
+      ring.rotation.x = Math.PI / 2;
+      ring.position.set(sx, h * (k / 4), sz);
+      g.add(ring);
+    }
+    // leaf cards near top
+    for (let k = 0; k < 2; k++) {
+      const card = new THREE.Mesh(trackGeo(crossedCardGeometry(1.5 * scale, 1.5 * scale)), leafMat);
+      card.position.set(sx + (Math.random() - 0.5) * 0.5, h * (0.72 + k * 0.14), sz + (Math.random() - 0.5) * 0.5);
+      card.rotation.y = Math.random() * Math.PI;
+      g.add(card);
+    }
+  }
+  parent.add(g);
+  colliders.push({ minX: x - 1.9 * scale, maxX: x + 1.9 * scale, minZ: z - 1.9 * scale, maxZ: z + 1.9 * scale, top: 3.0, kind: 'tree' });
+  return g;
+}
+
+// ===========================================================================
+//  WATERFALL — scrolling water streak texture + foam base
+// ===========================================================================
+let _waterfallTex = null;
+function getWaterfallTexture() {
+  if (_waterfallTex) return _waterfallTex;
+  const t = canvasTexture(256, (ctx, S) => {
+    ctx.fillStyle = 'rgba(150,200,220,0.55)';
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 60; i++) {
+      const x = Math.random() * S;
+      const w = 1 + Math.random() * 4;
+      const y = Math.random() * S;
+      const h = 30 + Math.random() * 120;
+      ctx.fillStyle = `rgba(255,255,255,${0.15 + Math.random() * 0.45})`;
+      ctx.fillRect(x, y, w, h);
+    }
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1, 3);
+  return t;
+}
+
+const waterfallMats = [];
+export function buildWaterfall(parent, x, y, z, w = 2.2, h = 6, rotY = 0) {
+  const T = getWaterfallTexture();
+  const mat = new THREE.MeshBasicMaterial({ map: T.clone(), transparent: true, opacity: 0.85, depthWrite: false, side: THREE.DoubleSide });
+  mat.map.wrapS = mat.map.wrapT = THREE.RepeatWrapping;
+  mat.map.repeat.set(1, 3);
+  waterfallMats.push(mat);
+  const plane = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(w, h)), mat);
+  plane.position.set(x, y + h / 2, z);
+  plane.rotation.y = rotY;
+  plane.name = 'waterfall';
+  parent.add(plane);
+  // foam at base
+  const foam = new THREE.Mesh(trackGeo(new THREE.CircleGeometry(w * 0.9, 16)), new THREE.MeshBasicMaterial({ color: 0xdfeef2, transparent: true, opacity: 0.55 }));
+  foam.rotation.x = -Math.PI / 2;
+  foam.position.set(x, y + 0.08, z + 0.6);
+  parent.add(foam);
+  return plane;
+}
+
+export function updateWaterfall(dt) {
+  for (const m of waterfallMats) { m.map.offset.y -= dt * 0.9; }
+}
+
+// ===========================================================================
+//  FALLING PETALS — GPU point particles drifting with the wind
+// ===========================================================================
+export function buildPetals(scene, area = 40, count = 320) {
+  const size = 64;
+  const tex = canvasTexture(size, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    ctx.translate(S / 2, S / 2);
+    ctx.rotate(-0.4);
+    const grad = ctx.createLinearGradient(-16, 0, 16, 0);
+    grad.addColorStop(0, 'rgba(255,214,228,0.95)');
+    grad.addColorStop(1, 'rgba(240,150,180,0.95)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, 0, 17, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(220,130,160,0.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-14, 0); ctx.lineTo(14, 0); ctx.stroke();
+  });
+
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const speed = new Float32Array(count);
+  const phase = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    pos[i * 3] = (Math.random() - 0.5) * area * 2;
+    pos[i * 3 + 1] = Math.random() * 22;
+    pos[i * 3 + 2] = (Math.random() - 0.5) * area * 2;
+    speed[i] = 0.12 + Math.random() * 0.25;
+    phase[i] = Math.random() * 100;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSpeed', new THREE.BufferAttribute(speed, 1));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(phase, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: windUniforms.uTime, uMap: { value: tex } },
+    transparent: true, depthWrite: false,
+    vertexShader: `
+      attribute float aSpeed; attribute float aPhase;
+      uniform float uTime; varying float vA;
+      void main(){
+        vec3 p = position;
+        float fall = fract(uTime * aSpeed * 0.08 + aPhase);
+        p.y = mix(22.0, 0.4, fall);
+        p.x += sin(uTime * 0.7 + aPhase * 1.7) * 2.2 + uTime * 0.25;
+        p.z += cos(uTime * 0.6 + aPhase * 1.3) * 1.8;
+        p.x = mod(p.x + 42.0, 84.0) - 42.0;
+        vA = 0.55 + 0.45 * sin(uTime * 2.0 + aPhase);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = 9.0 * (34.0 / max(1.0, -mv.z));
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform sampler2D uMap; varying float vA;
+      void main(){
+        vec4 c = texture2D(uMap, gl_PointCoord);
+        if (c.a < 0.25) discard;
+        gl_FragColor = vec4(c.rgb, c.a * vA * 0.9);
+      }`,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.name = 'petals';
+  pts.frustumCulled = false;
+  scene.add(pts);
+  return pts;
+}
+
+// ===========================================================================
+//  BRONZE DING (铜鼎) — plaza ceremonial vessel
+// ===========================================================================
+export function buildBronzeDing(parent, x, z, s = 1) {
+  const m = M();
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  const bronze = new THREE.MeshStandardMaterial({ color: 0x6e5a3a, roughness: 0.45, metalness: 0.75 });
+  const body = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(1.0 * s, 0.8 * s, 1.1 * s, 16)), bronze);
+  body.position.y = 1.0 * s; body.castShadow = true; g.add(body);
+  const rim = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(1.0 * s, 0.08 * s, 6, 20)), bronze);
+  rim.rotation.x = Math.PI / 2; rim.position.y = 1.55 * s; g.add(rim);
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const leg = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.12 * s, 0.09 * s, 0.9 * s, 6)), bronze);
+    leg.position.set(Math.cos(a) * 0.45 * s, 0.45 * s, Math.sin(a) * 0.45 * s);
+    leg.castShadow = true; g.add(leg);
+  }
+  for (const sx of [-1, 1]) {
+    const handle = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(0.22 * s, 0.05 * s, 5, 10, Math.PI)), bronze);
+    handle.position.set(sx * 0.95 * s, 1.35 * s, 0);
+    handle.rotation.y = Math.PI / 2; g.add(handle);
+  }
+  parent.add(g);
+  colliders.push({ minX: x - 1.1 * s, maxX: x + 1.1 * s, minZ: z - 1.1 * s, maxZ: z + 1.1 * s, top: 1.6 * s, kind: 'prop' });
+  return g;
+}
+
+// ===========================================================================
+//  STONE LION (石狮) — guardian at the gate
+// ===========================================================================
+export function buildStoneLion(parent, x, z, s = 1, facing = 0) {
+  const m = M();
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+  g.rotation.y = facing;
+  // pedestal
+  const base = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(1.1 * s, 0.6 * s, 1.4 * s)), m.stoneLt);
+  base.position.y = 0.3 * s; base.castShadow = base.receiveShadow = true; g.add(base);
+  // body
+  const body = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.42 * s, 10, 8)), m.stoneLt);
+  body.scale.set(1.1, 1.35, 0.85); body.position.set(0, 1.0 * s, -0.1 * s); body.castShadow = true; g.add(body);
+  // head
+  const head = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.34 * s, 12, 10)), m.stoneLt);
+  head.position.set(0, 1.62 * s, 0.12 * s); head.castShadow = true; g.add(head);
+  // mane (ring of small spheres)
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const mane = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.09 * s, 6, 5)), m.stoneDk);
+    mane.position.set(Math.cos(a) * 0.3 * s, 1.62 * s + Math.sin(a) * 0.26 * s, 0.02 * s);
+    g.add(mane);
+  }
+  // front legs
+  for (const sx of [-0.22, 0.22]) {
+    const leg = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.1 * s, 0.12 * s, 0.75 * s, 6)), m.stoneLt);
+    leg.position.set(sx * s, 0.95 * s, 0.32 * s); leg.castShadow = true; g.add(leg);
+  }
+  // tail
+  const tail = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(0.16 * s, 0.05 * s, 4, 8, Math.PI)), m.stoneDk);
+  tail.position.set(0, 1.25 * s, -0.45 * s); tail.rotation.y = Math.PI / 2; g.add(tail);
+  parent.add(g);
+  colliders.push({ minX: x - 0.7 * s, maxX: x + 0.7 * s, minZ: z - 0.8 * s, maxZ: z + 0.8 * s, top: 2.0 * s, kind: 'prop' });
+  return g;
+}

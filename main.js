@@ -11,7 +11,7 @@ import {
   setEnvMaps,
 } from './world.js';
 import { spawnNPCs, updateNPCs, npcs } from './npc.js';
-import { updateWind, windUniforms } from './scenery.js';
+import { updateWind, windUniforms, updateWaterfall } from './scenery.js';
 import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
@@ -538,6 +538,7 @@ function animate() {
   updatePlayer(dt);
   updateNPCs(dt, getNightAmount());
   updateWind(clock.elapsedTime);
+  updateWaterfall(dt);
   updateCamera();
 
   // minimap at ~15fps

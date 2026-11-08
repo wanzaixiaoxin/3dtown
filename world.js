@@ -10,6 +10,7 @@ import {
   buildGrassField, buildFlowerBed, buildWillow, buildAnimatedPond,
   buildPavilion, buildRockery, buildGarden, buildBush, flushFlowers,
   makeFoliageMaterial, buildSkyDecor, buildRealTree,
+  buildPine, buildBamboo, buildWaterfall, buildPetals, buildBronzeDing, buildStoneLion,
 } from './scenery.js';
 
 export const TOWN = { half: 46 };        // playable half-size (scene doubled vs v1)
@@ -481,6 +482,7 @@ export function setupEnvironment(scene) {
   env.sky = buildSky(scene);
   env.skyMat = null;
   env.skyDecor = buildSkyDecor(scene);
+  env.petals = buildPetals(scene, 38, 300);
   scene.fog = new THREE.Fog(0xc8d8e2, 70, 260);
   env.fog = scene.fog;
 
@@ -753,6 +755,26 @@ export function buildWorld(scene, assets = null) {
     if (Math.abs(bx) < 7 || Math.abs(bz) < 7) return;
     buildBush(world, bx, bz, 0.9 + (i % 3) * 0.3);
   });
+
+  // --- pines, bamboo, waterfall, ceremonial props ---
+  buildPine(world, -36, 22, 1.0);
+  buildPine(world, -30, 38, 0.9);
+  buildPine(world, 26, -38, 1.0);
+  buildPine(world, 38, -24, 0.85);
+  buildPine(world, -40, -18, 1.05);
+  buildPine(world, 40, -2, 0.95);
+
+  buildBamboo(world, -37, 6, 11, 1.0);
+  buildBamboo(world, 36, 30, 9, 0.95);
+  buildBamboo(world, -20, -36, 8, 0.9);
+
+  // waterfall spilling off the rockery into a small basin
+  buildWaterfall(world, -30, 1.5, 31.6, 2.0, 3.4, 0);
+
+  // plaza bronze ding + gate guardian lions
+  buildBronzeDing(world, 3.6, 4.2, 0.9);
+  buildStoneLion(world, -4.6, 43.2, 0.95, Math.PI);
+  buildStoneLion(world, 4.6, 43.2, 0.95, Math.PI);
 
   // one-pass flush of all flower instances (few draw calls)
   flushFlowers(world);
