@@ -178,18 +178,32 @@ function buildHouse(parent, x, z, w, d, h, opts = {}) {
   const beam = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w + 0.08, 0.22, d + 0.08)), m.woodRed);
   beam.position.y = baseH + bodyH - 0.14; beam.castShadow = true; g.add(beam);
 
-  // hip roof: two sloped panels + ridge + gable ends
+  // hip roof with curved, upturned eaves (Chinese flying eave)
   const roofH = opts.roofH ?? Math.min(2.0, h * 0.5);
   const overhang = 0.7;
-  const slopeLen = Math.sqrt((d / 2 + overhang) ** 2 + roofH ** 2);
-  const roofAngle = Math.atan2(roofH, d / 2 + overhang);
-  const panelGeo = trackGeo(new THREE.BoxGeometry(w + overhang * 2, 0.16, slopeLen));
+  const eaveZ = d / 2 + overhang;
+  const upturn = roofH * 0.30;             // eave tip lifts
+  const SEG = 4;
+  const baseTop = baseH + bodyH;
+  const profile = [];
+  for (let i = 0; i <= SEG; i++) {
+    const t = i / SEG;
+    // concave slope: steep near ridge, flattening then curling up at the eave
+    const y = baseTop + roofH * Math.pow(1 - t, 1.35) + upturn * Math.pow(t, 7);
+    profile.push({ z: eaveZ * t, y });
+  }
   for (const side of [1, -1]) {
-    const panel = new THREE.Mesh(panelGeo, roofMat);
-    panel.position.set(0, baseH + bodyH + roofH / 2, side * (d / 4 + overhang / 2));
-    panel.rotation.x = side * roofAngle;
-    panel.castShadow = panel.receiveShadow = true;
-    g.add(panel);
+    for (let i = 0; i < SEG; i++) {
+      const p0 = profile[i], p1 = profile[i + 1];
+      const dz = side * (p1.z - p0.z), dy = p1.y - p0.y;
+      const L = Math.hypot(dz, dy);
+      const theta = Math.atan2(-dy, dz);
+      const panel = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w + overhang * 2, 0.14, L * 1.04)), roofMat);
+      panel.position.set(0, (p0.y + p1.y) / 2, side * (p0.z + p1.z) / 2);
+      panel.rotation.x = theta;
+      panel.castShadow = panel.receiveShadow = true;
+      g.add(panel);
+    }
   }
   // triangular gable ends (fill the gap under the ridge at front/back)
   const gableShape = new THREE.Shape();
@@ -198,17 +212,18 @@ function buildHouse(parent, x, z, w, d, h, opts = {}) {
   for (const sx of [-1, 1]) {
     const gab = new THREE.Mesh(gableGeo, wallMat);
     gab.rotation.y = Math.PI / 2;
-    gab.position.set(sx * w / 2, baseH + bodyH, 0);
+    gab.position.set(sx * w / 2, baseTop, 0);
     g.add(gab);
   }
-  // ridge
+  // ridge beam
   const ridge = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w + overhang * 2, 0.18, 0.32)), m.woodDark);
-  ridge.position.y = baseH + bodyH + roofH; ridge.castShadow = true; g.add(ridge);
-  // eave upturn tips
+  ridge.position.y = baseTop + roofH + upturn; ridge.castShadow = true; g.add(ridge);
+  // ridge ornaments (吻兽) at both ends
   for (const sx of [-1, 1]) {
-    const tip = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.3, 0.2, 0.55)), m.gold);
-    tip.position.set(sx * (w / 2 + overhang), baseH + bodyH + 0.08, 0);
-    tip.rotation.z = sx * 0.25; tip.castShadow = true; g.add(tip);
+    const orn = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(0.16, 0.5, 4)), m.gold);
+    orn.position.set(sx * (w / 2 + overhang), baseTop + roofH + upturn + 0.22, 0);
+    orn.rotation.z = sx * -0.35;
+    orn.castShadow = true; g.add(orn);
   }
 
   // door (recessed, with frame)

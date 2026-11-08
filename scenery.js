@@ -337,43 +337,84 @@ export function buildPavilion(parent, x, z, s = 1) {
   const beam = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(ringR, 0.1 * s, 6, 24)), m.woodDark);
   beam.rotation.x = Math.PI / 2; beam.position.y = 0.5 * s + colH; g.add(beam);
 
-  // two-tier pagoda roof — steep cones with flared eaves and upturned tips
+  // railings between columns (top + bottom rail + balusters)
+  for (let i = 0; i < 6; i++) {
+    const a0 = (i / 6) * Math.PI * 2, a1 = ((i + 1) / 6) * Math.PI * 2;
+    const p0 = new THREE.Vector3(Math.cos(a0) * ringR, 0, Math.sin(a0) * ringR);
+    const p1 = new THREE.Vector3(Math.cos(a1) * ringR, 0, Math.sin(a1) * ringR);
+    const mid = p0.clone().add(p1).multiplyScalar(0.5);
+    const len = p0.distanceTo(p1) * 0.94;
+    const ang = Math.atan2(p1.z - p0.z, p1.x - p0.x);
+    for (const [yy, hh] of [[0.5 * s + 0.95 * s, 0.08 * s], [0.5 * s + 0.45 * s, 0.06 * s]]) {
+      const rail = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(len, hh, 0.1 * s)), m.pavilionRed);
+      rail.position.set(mid.x, yy, mid.z);
+      rail.rotation.y = -ang;
+      rail.castShadow = true; g.add(rail);
+    }
+    // balusters
+    for (let b = 1; b <= 3; b++) {
+      const t = b / 4;
+      const bx = p0.x + (p1.x - p0.x) * t, bz = p0.z + (p1.z - p0.z) * t;
+      const bal = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.06 * s, 0.42 * s, 0.06 * s)), m.pavilionRed);
+      bal.position.set(bx, 0.5 * s + 0.66 * s, bz);
+      g.add(bal);
+    }
+  }
+
+  // two-tier pagoda roof — steep cones, small eaves, proper stacking
   const roofY = 0.5 * s + colH;
-  const roofMat = m.roofBlue.clone ? m.roofBlue : m.roofBlue;
-  const roofDS = roofMat.clone();
+  const roofDS = m.roofBlue.clone();
   roofDS.side = THREE.DoubleSide;
   roofDS.color = new THREE.Color(0xffffff);
-  // lower tier
-  const r1 = baseR + 0.9 * s, h1 = 2.0 * s;
-  const cone1 = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(r1, h1, 6)), roofDS);
-  cone1.position.y = roofY + h1 / 2; cone1.rotation.y = Math.PI / 6;
+  const roofMat = roofDS;
+  // ---- lower tier ----
+  const r1 = baseR + 0.9 * s;
+  const h1 = 3.2 * s;
+  const cone1 = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(r1, h1, 6)), roofMat);
+  cone1.position.y = roofY + h1 / 2;
+  cone1.rotation.y = Math.PI / 6;
   cone1.castShadow = true; g.add(cone1);
-  // eave ring (slightly flared)
-  const eave1 = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(r1 * 0.99, r1 * 1.06, 0.16 * s, 6, 1, true)), roofDS);
-  eave1.position.y = roofY + 0.02; eave1.rotation.y = Math.PI / 6; g.add(eave1);
-  // upper storey (hexagonal drum)
-  const drum = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(baseR * 0.5, baseR * 0.55, 1.0 * s, 6)), m.plaster);
-  drum.position.y = roofY + h1 * 0.72 + 0.5 * s; drum.rotation.y = Math.PI / 6; drum.castShadow = true; g.add(drum);
-  // upper tier roof
-  const r2 = baseR * 0.8, h2 = 1.35 * s;
-  const cone2 = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(r2, h2, 6)), roofDS);
-  cone2.position.y = roofY + h1 * 0.72 + 1.0 * s + h2 / 2; cone2.rotation.y = Math.PI / 6;
+  // eave edge ring
+  const eave1 = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(r1 * 0.99, 0.09 * s, 6, 24)), roofMat);
+  eave1.rotation.x = Math.PI / 2;
+  eave1.position.y = roofY + 0.02; g.add(eave1);
+  // dark eave underside (reads as shadowed rafters from below)
+  const ceil1 = new THREE.Mesh(trackGeo(new THREE.CircleGeometry(r1 * 0.99, 24)), m.woodDark);
+  ceil1.rotation.x = Math.PI / 2;
+  ceil1.position.y = roofY - 0.01; g.add(ceil1);
+  // ---- upper storey drum ----
+  const drumR = baseR * 0.48;
+  const drumH = 0.95 * s;
+  const drum = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(drumR, drumR * 1.04, drumH, 6)), m.plaster);
+  drum.position.y = roofY + h1 * 0.8 + drumH / 2;
+  drum.rotation.y = Math.PI / 6; drum.castShadow = true; g.add(drum);
+  // ---- upper tier ----
+  const r2 = drumR + 0.55 * s;
+  const h2 = 2.0 * s;
+  const upperBase = roofY + h1 * 0.8 + drumH;
+  const cone2 = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(r2, h2, 6)), roofMat);
+  cone2.position.y = upperBase + h2 / 2;
+  cone2.rotation.y = Math.PI / 6;
   cone2.castShadow = true; g.add(cone2);
-  const eave2 = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(r2 * 0.99, r2 * 1.06, 0.14 * s, 6, 1, true)), roofDS);
-  eave2.position.y = roofY + h1 * 0.72 + 1.0 * s; eave2.rotation.y = Math.PI / 6; g.add(eave2);
-  // upturned gold tips on both tiers
-  for (const [rr, yy, off] of [[r1, roofY + 0.06, 0], [r2, roofY + h1 * 0.72 + 1.0 * s + 0.02, 0]]) {
+  const eave2 = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(r2 * 0.99, 0.075 * s, 6, 24)), roofMat);
+  eave2.rotation.x = Math.PI / 2;
+  eave2.position.y = upperBase + 0.01; g.add(eave2);
+  const ceil2 = new THREE.Mesh(trackGeo(new THREE.CircleGeometry(r2 * 0.99, 24)), m.woodDark);
+  ceil2.rotation.x = Math.PI / 2;
+  ceil2.position.y = upperBase - 0.01; g.add(ceil2);
+  // upturned gold tips at both eave rings
+  for (const [rr, yy] of [[r1, roofY + 0.02], [r2, upperBase + 0.01]]) {
     for (let c = 0; c < 6; c++) {
       const ca = (c / 6) * Math.PI * 2 + Math.PI / 6;
-      const tip = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(0.075 * s, 0.55 * s, 4)), m.gold);
-      tip.position.set(Math.cos(ca) * rr * 1.03, yy, Math.sin(ca) * rr * 1.03);
-      tip.rotation.set(0.5 * Math.sin(ca), -ca, -0.85 + 0.1 * Math.cos(ca));
+      const tip = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(0.07 * s, 0.5 * s, 4)), m.gold);
+      tip.position.set(Math.cos(ca) * rr * 1.01, yy + 0.1 * s, Math.sin(ca) * rr * 1.01);
+      tip.rotation.set(Math.sin(ca) * 0.75, -ca, -Math.cos(ca) * 0.75);
       g.add(tip);
     }
   }
   // finial
   const finial = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.2 * s, 10, 10)), m.gold);
-  finial.position.y = roofY + h1 * 0.72 + 1.0 * s + h2 + 0.35 * s; g.add(finial);
+  finial.position.y = upperBase + h2 + 0.3 * s; g.add(finial);
 
   parent.add(g);
   colliders.push({ minX: x - baseR, maxX: x + baseR, minZ: z - baseR, maxZ: z + baseR, top: roofY, kind: 'pavilion' });

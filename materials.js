@@ -157,6 +157,24 @@ export function plasterTexture() {
   return toTex(c, 3);
 }
 
+// lattice window: dark frame + warm panes (used as map + emissiveMap)
+export function latticeTexture() {
+  const { c, ctx } = makeCanvas(128);
+  ctx.fillStyle = '#2a2018'; ctx.fillRect(0, 0, 128, 128);
+  const cols = 4, rows = 5;
+  const pw = 128 / cols, ph = 128 / rows;
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      ctx.fillStyle = '#ffd79a';
+      ctx.fillRect(x * pw + 3, y * ph + 3, pw - 6, ph - 6);
+    }
+  }
+  ctx.strokeStyle = '#1d1510'; ctx.lineWidth = 4;
+  for (let x = 0; x <= cols; x++) { ctx.beginPath(); ctx.moveTo(x * pw, 0); ctx.lineTo(x * pw, 128); ctx.stroke(); }
+  for (let y = 0; y <= rows; y++) { ctx.beginPath(); ctx.moveTo(0, y * ph); ctx.lineTo(128, y * ph); ctx.stroke(); }
+  return toTex(c, 1);
+}
+
 // Create-or-get shared material set (lazy singleton).
 export function M() {
   if (_mat) return _mat;
@@ -268,7 +286,10 @@ export function M() {
     dirt:        std({ color: 0x8a7355, roughness: 1.0 }),
     water:       std({ color: 0x2f5d72, roughness: 0.9, metalness: 0.0, transparent: true, opacity: 0.93, envMapIntensity: 0.08 }),
     skin:        std({ color: 0xd8a97f, roughness: 0.85 }),
-    windowLit:   std({ color: 0x2a2016, emissive: 0xffb04a, emissiveIntensity: 0.0, roughness: 0.7 }),
+    windowLit:   std({
+      color: 0xffffff, emissive: 0xffb04a, emissiveIntensity: 0.0, roughness: 0.65,
+      map: latticeTexture(), emissiveMap: latticeTexture(),
+    }),
     lantern:     std({ color: 0xd23b2b, emissive: 0xff5a2a, emissiveIntensity: 0.0, roughness: 0.5 }),
     lampGlow:    std({ color: 0x3a2f20, emissive: 0xffc46a, emissiveIntensity: 0.0, roughness: 0.6 }),
     // garden / flora
