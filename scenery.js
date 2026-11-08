@@ -1079,3 +1079,207 @@ export function buildStoneLion(parent, x, z, s = 1, facing = 0) {
   colliders.push({ minX: x - 0.7 * s, maxX: x + 0.7 * s, minZ: z - 0.8 * s, maxZ: z + 0.8 * s, top: 2.0 * s, kind: 'prop' });
   return g;
 }
+
+// ===========================================================================
+//  WUPENG BOAT (乌篷船) — moored on the pond, gently bobbing
+// ===========================================================================
+const boats = [];
+export function buildBoat(parent, x, z, rotY = 0, s = 1) {
+  const g = new THREE.Group();
+  g.position.set(x, 0.12, z);
+  g.rotation.y = rotY;
+
+  // hull: elongated capsule lying along Z, flattened vertically
+  const hullGeo = trackGeo(new THREE.CapsuleGeometry(0.55 * s, 2.2 * s, 4, 12));
+  hullGeo.rotateX(Math.PI / 2);
+  hullGeo.scale(1, 0.55, 1.15);
+  const hull = new THREE.Mesh(hullGeo, new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 0.85 }));
+  hull.position.y = 0.10 * s;
+  hull.castShadow = true; g.add(hull);
+
+  // gunwale rim
+  const rim = new THREE.Mesh(trackGeo(new THREE.TorusGeometry(0.55 * s, 0.05 * s, 5, 20)), new THREE.MeshStandardMaterial({ color: 0x2e2118, roughness: 0.8 }));
+  rim.rotation.x = Math.PI / 2;
+  rim.scale.set(1, 2.2, 1);
+  rim.position.y = 0.30 * s; g.add(rim);
+
+  // wupeng canopy: half-dome over the middle of the boat
+  const canopyGeo = trackGeo(new THREE.SphereGeometry(0.62 * s, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2));
+  canopyGeo.scale(1, 1.0, 2.0);
+  const canopy = new THREE.Mesh(canopyGeo, new THREE.MeshStandardMaterial({ color: 0x2b2a26, roughness: 0.95, side: THREE.DoubleSide }));
+  canopy.position.set(0, 0.28 * s, -0.15 * s);
+  canopy.castShadow = true; g.add(canopy);
+
+  // small oar
+  const oar = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.035 * s, 0.035 * s, 2.4 * s, 5)), new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.85 }));
+  oar.position.set(0.78 * s, 0.32 * s, 0.65 * s);
+  oar.rotation.set(0.45, 0, 0.75); g.add(oar);
+
+  parent.add(g);
+  boats.push({ group: g, baseY: g.position.y, phase: Math.random() * Math.PI * 2 });
+  return g;
+}
+
+export function updateBoats(t) {
+  for (const b of boats) {
+    b.group.position.y = b.baseY + Math.sin(t * 0.8 + b.phase) * 0.03;
+    b.group.rotation.z = Math.sin(t * 0.6 + b.phase) * 0.02;
+  }
+}
+
+// ===========================================================================
+//  LANTERN STRING (灯笼串)
+// ===========================================================================
+export function buildLanternString(parent, ax, az, bx, bz, y = 4.2, count = 7, sag = 0.6) {
+  const m = M();
+  const g = new THREE.Group();
+  const A = new THREE.Vector3(ax, y, az), B = new THREE.Vector3(bx, y, bz);
+  // rope segments
+  const segs = 12;
+  let prev = A.clone();
+  for (let i = 1; i <= segs; i++) {
+    const t = i / segs;
+    const p = new THREE.Vector3().lerpVectors(A, B, t);
+    p.y -= Math.sin(t * Math.PI) * sag;
+    const mid = prev.clone().add(p).multiplyScalar(0.5);
+    const len = prev.distanceTo(p);
+    const rope = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.012, 0.012, len, 4)), m.woodDark);
+    rope.position.copy(mid);
+    rope.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), p.clone().sub(prev).normalize());
+    g.add(rope);
+    prev = p;
+  }
+  // lanterns
+  for (let i = 1; i < count; i++) {
+    const t = i / count;
+    const p = new THREE.Vector3().lerpVectors(A, B, t);
+    p.y -= Math.sin(t * Math.PI) * sag;
+    const lan = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.16, 10, 10)), m.lantern);
+    lan.position.copy(p).setY(p.y - 0.26);
+    lan.scale.y = 1.35;
+    g.add(lan);
+    const cord = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.01, 0.01, 0.24, 4)), m.woodDark);
+    cord.position.copy(p).setY(p.y - 0.12);
+    g.add(cord);
+  }
+  parent.add(g);
+  return g;
+}
+
+// ===========================================================================
+//  BANNER (酒旗/幡旗) — cloth with a painted character, sways in the wind
+// ===========================================================================
+let _bannerTextures = {};
+function bannerTexture(text, bg = '#a8382a', fg = '#f2e3c2') {
+  if (_bannerTextures[text]) return _bannerTextures[text];
+  const t = canvasTexture(128, (ctx, S) => {
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
+    ctx.strokeStyle = 'rgba(242,227,194,0.55)'; ctx.lineWidth = 4;
+    ctx.strokeRect(8, 8, S - 16, S - 16);
+    ctx.fillStyle = fg;
+    ctx.font = 'bold 72px "Songti SC", serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, S / 2, S / 2 + 4);
+  });
+  _bannerTextures[text] = t;
+  return t;
+}
+
+export function buildBanner(parent, x, z, text = '酒', rotY = 0) {
+  const m = M();
+  const g = new THREE.Group();
+  g.position.set(x, 0, z); g.rotation.y = rotY;
+  const poleH = 3.6;
+  const pole = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.06, 0.08, poleH, 6)), m.woodDark);
+  pole.position.y = poleH / 2; pole.castShadow = true; g.add(pole);
+  const arm = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.9, 0.07, 0.07)), m.woodDark);
+  arm.position.set(0.42, poleH - 0.15, 0); g.add(arm);
+  const mat = new THREE.MeshStandardMaterial({ map: bannerTexture(text), side: THREE.DoubleSide, roughness: 0.9, transparent: true });
+  const cloth = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(0.8, 1.5, 4, 4)), mat);
+  cloth.position.set(0.78, poleH - 1.0, 0);
+  cloth.name = 'banner-cloth';
+  g.add(cloth);
+  parent.add(g);
+  colliders.push({ minX: x - 0.2, maxX: x + 0.2, minZ: z - 0.2, maxZ: z + 0.2, top: poleH, kind: 'prop' });
+  return g;
+}
+
+// ===========================================================================
+//  MIST (晨雾/水汽) — soft drifting billboards near the ground
+// ===========================================================================
+const mistSprites = [];
+export function buildMist(scene, count = 14) {
+  const tex = canvasTexture(128, (ctx, S) => {
+    const g = ctx.createRadialGradient(S/2, S/2, 4, S/2, S/2, S/2);
+    g.addColorStop(0, 'rgba(235,243,246,0.55)');
+    g.addColorStop(1, 'rgba(235,243,246,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, S, S);
+  });
+  const group = new THREE.Group(); group.name = 'mist';
+  for (let i = 0; i < count; i++) {
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.14, depthWrite: false, fog: false });
+    const s = new THREE.Sprite(mat);
+    const a = Math.random() * Math.PI * 2, r = 12 + Math.random() * 38;
+    s.position.set(Math.cos(a) * r, 1.2 + Math.random() * 2.6, Math.sin(a) * r);
+    const sc = 14 + Math.random() * 24;
+    s.scale.set(sc, sc * 0.35, 1);
+    s.userData = { baseX: s.position.x, baseZ: s.position.z, phase: Math.random() * Math.PI * 2 };
+    group.add(s); mistSprites.push(s);
+  }
+  scene.add(group);
+  return group;
+}
+
+export function updateMist(t) {
+  for (const s of mistSprites) {
+    s.position.x = s.userData.baseX + Math.sin(t * 0.12 + s.userData.phase) * 2.2;
+    s.position.z = s.userData.baseZ + Math.cos(t * 0.1 + s.userData.phase) * 1.8;
+  }
+}
+
+// ===========================================================================
+//  RAIN — GPU line streaks that follow the camera
+// ===========================================================================
+let rainObj = null;
+export function buildRain(scene, count = 1800) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 6);
+  const speed = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    const x = (Math.random() - 0.5) * 60;
+    const y = Math.random() * 26;
+    const z = (Math.random() - 0.5) * 60;
+    pos.set([x, y, z, x, y - 0.55, z], i * 6);
+    const sp = 9 + Math.random() * 8;
+    speed[i * 2] = sp; speed[i * 2 + 1] = sp;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSpeed', new THREE.BufferAttribute(speed, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: windUniforms.uTime, uColor: { value: new THREE.Color(0xbfd6e6) } },
+    transparent: true, depthWrite: false,
+    vertexShader: `
+      attribute float aSpeed; uniform float uTime;
+      void main(){
+        vec3 p = position;
+        p.y = mod(p.y - uTime * aSpeed, 26.0);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }`,
+    fragmentShader: `uniform vec3 uColor; void main(){ gl_FragColor = vec4(uColor, 0.35); }`,
+  });
+  rainObj = new THREE.LineSegments(geo, mat);
+  rainObj.name = 'rain';
+  rainObj.frustumCulled = false;
+  rainObj.visible = false;
+  scene.add(rainObj);
+  return rainObj;
+}
+
+export function setRain(on, camera) {
+  if (rainObj) rainObj.visible = on;
+}
+export function updateRain(camera) {
+  if (rainObj && rainObj.visible && camera) {
+    rainObj.position.set(camera.position.x, 0, camera.position.z);
+  }
+}

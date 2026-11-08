@@ -8,10 +8,10 @@ import { M, disposables, setPBRTextures } from './materials.js';
 import {
   TOWN, colliders, ladders, world as worldRef,
   buildWorld, setupEnvironment, applyTime, getExposure, getTimeLabel, getNightAmount,
-  setEnvMaps,
+  setEnvMaps, setWeatherMode,
 } from './world.js';
 import { spawnNPCs, updateNPCs, npcs, applyGait } from './npc.js';
-import { updateWind, windUniforms, updateWaterfall } from './scenery.js';
+import { updateWind, windUniforms, updateWaterfall, updateBoats, updateMist, updateRain, setRain } from './scenery.js';
 import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
@@ -32,6 +32,7 @@ const settings = {
   walkSpeed: 3.4,
   invertY: false,
   quality: 'medium',
+  weather: 'clear',
 };
 const SETTINGS_KEY = 'guzhen-settings-v2';
 function loadSettings() {
@@ -212,6 +213,21 @@ function bindUI() {
     spdVal.textContent = settings.walkSpeed.toFixed(1);
     saveSettings();
   });
+
+  // weather selector
+  const wbtns = document.querySelectorAll('[data-weather]');
+  const wval = document.getElementById('weatherVal');
+  function applyWeather(mode) {
+    settings.weather = mode;
+    setWeatherMode(mode);
+    setRain(mode === 'rain');
+    wbtns.forEach(b => b.classList.toggle('active', b.dataset.weather === mode));
+    if (wval) wval.textContent = mode === 'rain' ? '雨' : '晴';
+    renderer.toneMappingExposure = getExposure() * (mode === 'rain' ? 0.88 : 1);
+    saveSettings();
+  }
+  wbtns.forEach(b => b.addEventListener('click', () => applyWeather(b.dataset.weather)));
+  applyWeather(settings.weather);
 
   // quality selector
   const qbtns = document.querySelectorAll('[data-quality]');
@@ -539,6 +555,9 @@ function animate() {
   updateNPCs(dt, getNightAmount());
   updateWind(clock.elapsedTime);
   updateWaterfall(dt);
+  updateBoats(clock.elapsedTime);
+  updateMist(clock.elapsedTime);
+  updateRain(camera);
   updateCamera();
 
   // minimap at ~15fps

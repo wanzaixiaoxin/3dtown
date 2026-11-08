@@ -11,6 +11,7 @@ import {
   buildPavilion, buildRockery, buildGarden, buildBush, flushFlowers,
   makeFoliageMaterial, buildSkyDecor, buildRealTree,
   buildPine, buildBamboo, buildWaterfall, buildPetals, buildBronzeDing, buildStoneLion,
+  buildBoat, buildLanternString, buildBanner, buildMist, buildRain,
 } from './scenery.js';
 
 export const TOWN = { half: 46 };        // playable half-size (scene doubled vs v1)
@@ -29,6 +30,7 @@ export const env = {
   sunLight: null, nightLights: [], // PointLights that turn on at night
   envMaps: null,                    // { morning, noon, afternoon, night } PMREM textures
   timeKey: 'noon',
+  weather: 'clear',
 };
 
 // ---------------------------------------------------------------------------
@@ -483,6 +485,8 @@ export function setupEnvironment(scene) {
   env.skyMat = null;
   env.skyDecor = buildSkyDecor(scene);
   env.petals = buildPetals(scene, 38, 300);
+  buildMist(scene, 14);
+  buildRain(scene, 1800);
   scene.fog = new THREE.Fog(0xc8d8e2, 70, 260);
   env.fog = scene.fog;
 
@@ -525,7 +529,14 @@ export function applyTime(key, instant = true) {
   env.sky.setColors(p.skyTop, p.skyBot, p.sunPos, p.sunColor,
     key === 'night' ? 0.55 : 1.0, key === 'night');
 
-  if (env.fog) { env.fog.color.set(p.fog); env.fog.near = p.fogNear; env.fog.far = p.fogFar; }
+  const rainy = env.weather === 'rain';
+  if (env.fog) {
+    env.fog.color.set(rainy ? 0x8d99a6 : p.fog);
+    env.fog.near = p.fogNear * (rainy ? 0.45 : 1);
+    env.fog.far = p.fogFar * (rainy ? 0.55 : 1);
+  }
+  if (rainy && env.sun) { env.sun.intensity = p.sunInt * 0.55; }
+  else if (env.sun) { env.sun.intensity = p.sunInt; }
   env.scene.background = new THREE.Color(p.skyBot);
 
   env.hemi.color.set(p.hemiSky);
@@ -568,6 +579,11 @@ export function applyTime(key, instant = true) {
   }
 
   return p.label;
+}
+
+export function setWeatherMode(mode) {
+  env.weather = mode;
+  if (_curPreset) applyTime(env.timeKey);
 }
 
 export function setEnvMaps(maps) {
@@ -770,6 +786,15 @@ export function buildWorld(scene, assets = null) {
 
   // waterfall spilling off the rockery into a small basin
   buildWaterfall(world, -30, 1.5, 31.6, 2.0, 3.4, 0);
+
+  // moored boat on the pond + lantern strings across the lanes + shop banners
+  buildBoat(world, -21.5, 21.5, -0.7, 1.0);
+  buildLanternString(world, -9, 10.5, 9, 10.5, 4.4, 9, 0.7);
+  buildLanternString(world, -9, -10.5, 9, -10.5, 4.4, 9, 0.7);
+  buildLanternString(world, 10.5, -9, 10.5, 9, 4.4, 9, 0.7);
+  buildBanner(world, 6.4, 6.2, '酒', -0.4);
+  buildBanner(world, -7.2, -6.4, '茶', 0.5);
+  buildBanner(world, 15.4, -3.2, '客栈', -1.2);
 
   // plaza bronze ding + gate guardian lions
   buildBronzeDing(world, 3.6, 4.2, 0.9);
