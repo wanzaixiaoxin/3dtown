@@ -4,6 +4,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { M, trackGeo } from './materials.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { colliders } from './world.js';
 
 // --- shared wind uniforms (driven by main.js each frame) ---
@@ -16,6 +17,211 @@ export function updateWind(t) {
   windUniforms.uTime.value = t;
   // gentle gusting
   windUniforms.uWindStrength.value = 0.75 + 0.35 * Math.sin(t * 0.4);
+}
+
+// ===========================================================================
+//  ORGANIC FOLIAGE TEXTURES (canvas-generated alpha cards)
+// ===========================================================================
+function canvasTexture(size, draw) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  draw(ctx, size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
+
+let _leafTex = null, _leafDarkTex = null, _blossomTex = null, _grassTex = null, _flowerTex = null, _willowTex = null;
+
+function makeLeafTexture(hue, sat, light, count, size = 512) {
+  return canvasTexture(size, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    const cx = S / 2, cy = S / 2;
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.pow(Math.random(), 0.55) * S * 0.46;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r * 0.94;
+      const w = 5 + Math.random() * 11;
+      const h = 2.6 + Math.random() * 6;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(a + Math.random() * 1.4);
+      const l = light + (Math.random() - 0.5) * 24;
+      const s2 = sat + (Math.random() - 0.5) * 16;
+      const grad = ctx.createLinearGradient(-w, 0, w, 0);
+      grad.addColorStop(0, `hsla(${hue - 4},${s2}%,${l - 9}%,0.96)`);
+      grad.addColorStop(1, `hsla(${hue + 10},${s2}%,${l + 9}%,0.96)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.ellipse(0, 0, w, h, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = `hsla(${hue},${s2}%,${l - 18}%,0.45)`;
+      ctx.lineWidth = 0.7;
+      ctx.beginPath(); ctx.moveTo(-w * 0.9, 0); ctx.lineTo(w * 0.9, 0); ctx.stroke();
+      ctx.restore();
+    }
+  });
+}
+
+function makeBlossomTexture(size = 512) {
+  return canvasTexture(size, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    const cx = S / 2, cy = S / 2;
+    for (let i = 0; i < 190; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.pow(Math.random(), 0.55) * S * 0.44;
+      const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+      const petals = 5, rad = 4 + Math.random() * 6;
+      const hue = 335 + Math.random() * 16;
+      for (let p = 0; p < petals; p++) {
+        const pa = (p / petals) * Math.PI * 2 + Math.random() * 0.3;
+        ctx.beginPath();
+        ctx.ellipse(x + Math.cos(pa) * rad * 0.7, y + Math.sin(pa) * rad * 0.7, rad * 0.62, rad * 0.42, pa, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${hue},${55 + Math.random() * 20}%,${80 + Math.random() * 10}%,0.95)`;
+        ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(x, y, rad * 0.25, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,235,170,0.95)'; ctx.fill();
+    }
+    // a few green leaves between blossoms
+    for (let i = 0; i < 40; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * S * 0.44;
+      ctx.beginPath();
+      ctx.ellipse(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 8, 3.5, a, 0, Math.PI * 2);
+      ctx.fillStyle = 'hsla(100,40%,35%,0.85)'; ctx.fill();
+    }
+  });
+}
+
+function makeGrassCardTexture(size = 256) {
+  return canvasTexture(size, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    for (let i = 0; i < 110; i++) {
+      const x = S * 0.5 + (Math.random() - 0.5) * S * 0.9;
+      const h = S * (0.4 + Math.random() * 0.55);
+      const w = 0.8 + Math.random() * 2.4;
+      const bend = (Math.random() - 0.5) * S * 0.22;
+      const hue = 92 + Math.random() * 34;
+      const l = 24 + Math.random() * 24;
+      ctx.strokeStyle = `hsla(${hue},${45 + Math.random() * 20}%,${l}%,0.95)`;
+      ctx.lineWidth = w; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, S);
+      ctx.quadraticCurveTo(x + bend * 0.35, S - h * 0.55, x + bend, S - h);
+      ctx.stroke();
+    }
+  });
+}
+
+function makeFlowerCardTexture(size = 256) {
+  return canvasTexture(size, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    const palette = [[335, 70, 72], [0, 0, 96], [45, 90, 62], [350, 65, 72], [280, 40, 80]];
+    for (let i = 0; i < 12; i++) {
+      const bx = S * (0.2 + Math.random() * 0.6);
+      const bh = S * (0.45 + Math.random() * 0.45);
+      ctx.strokeStyle = 'hsla(105,45%,32%,0.95)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(bx, S);
+      ctx.quadraticCurveTo(bx + (Math.random() - 0.5) * 14, S - bh * 0.6, bx, S - bh);
+      ctx.stroke();
+      const [h, s, l] = palette[Math.floor(Math.random() * palette.length)];
+      for (let p = 0; p < 5; p++) {
+        const pa = (p / 5) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.ellipse(bx + Math.cos(pa) * 5, S - bh + Math.sin(pa) * 5, 4.5, 2.8, pa, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${h},${s}%,${l}%,0.96)`; ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(bx, S - bh, 2, 0, Math.PI * 2);
+      ctx.fillStyle = 'hsla(48,90%,70%,0.95)'; ctx.fill();
+    }
+  });
+}
+
+function makeWillowTexture(size = 512) {
+  return canvasTexture(size, (ctx, S) => {
+    ctx.clearRect(0, 0, S, S);
+    for (let i = 0; i < 22; i++) {
+      const x = Math.random() * S;
+      const len = S * (0.55 + Math.random() * 0.42);
+      const sway = (Math.random() - 0.5) * 26;
+      ctx.strokeStyle = 'hsla(95,35%,38%,0.75)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.quadraticCurveTo(x + sway, len * 0.55, x + sway * 0.6, len);
+      ctx.stroke();
+      // small leaves along the strand
+      for (let k = 0; k < 26; k++) {
+        const t = k / 26;
+        const lx = x + sway * (t * t) * 0.9;
+        const ly = len * t;
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate((Math.random() - 0.5) * 1.2);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 5.5, 1.8, 0, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${92 + Math.random() * 26},${38 + Math.random() * 18}%,${34 + Math.random() * 16}%,0.95)`;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  });
+}
+
+function getLeafTextures() {
+  if (!_leafTex) {
+    _leafTex = makeLeafTexture(108, 46, 36, 340);
+    _leafDarkTex = makeLeafTexture(132, 40, 27, 300);
+    _blossomTex = makeBlossomTexture();
+    _grassTex = makeGrassCardTexture();
+    _flowerTex = makeFlowerCardTexture();
+    _willowTex = makeWillowTexture();
+  }
+  return { leaf: _leafTex, dark: _leafDarkTex, blossom: _blossomTex, grass: _grassTex, flower: _flowerTex, willow: _willowTex };
+}
+
+// material for alpha-tested foliage cards, with wind sway
+function makeCardMaterial(map, { color = 0xffffff, alphaTest = 0.38, swayAmp = 0.14, swaySpeed = 1.0 } = {}) {
+  const mat = new THREE.MeshStandardMaterial({
+    map, color, alphaTest, transparent: false,
+    side: THREE.DoubleSide, roughness: 0.95, metalness: 0.0,
+  });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uTime = windUniforms.uTime;
+    shader.uniforms.uWindDir = windUniforms.uWindDir;
+    shader.uniforms.uWindStrength = windUniforms.uWindStrength;
+    shader.uniforms.uSwayAmp = { value: swayAmp };
+    shader.uniforms.uSwaySpeed = { value: swaySpeed };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+        uniform float uTime; uniform vec2 uWindDir; uniform float uWindStrength;
+        uniform float uSwayAmp; uniform float uSwaySpeed;
+      `)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float w = sin(uTime * uSwaySpeed + position.x * 0.35 + position.z * 0.35);
+        float amp = uSwayAmp * uWindStrength * clamp(transformed.y + 1.2, 0.0, 3.0);
+        transformed.x += uWindDir.x * w * amp;
+        transformed.z += uWindDir.y * w * amp;
+      `);
+  };
+  mat.customProgramCacheKey = () => 'cardsway' + swayAmp + swaySpeed;
+  return mat;
+}
+
+function crossedCardGeometry(w, h) {
+  const planes = [];
+  for (let i = 0; i < 3; i++) {
+    const g = new THREE.PlaneGeometry(w, h);
+    g.rotateY((i / 3) * Math.PI);
+    planes.push(g);
+  }
+  const merged = mergeGeometries(planes, false);
+  planes.forEach(g => g.dispose());
+  return merged;
 }
 
 // ===========================================================================
@@ -85,7 +291,7 @@ export function makeFoliageMaterial(color, swayAmp = 0.12, swaySpeed = 1.0) {
 // Water: animated ripple normal via shader displacement + fresnel-ish tint
 export function makeWaterMaterial(color = 0x3f7288) {
   const mat = new THREE.MeshStandardMaterial({
-    color, roughness: 0.92, metalness: 0.0, transparent: true, opacity: 0.93, envMapIntensity: 0.06,
+    color, roughness: 1.0, metalness: 0.0, transparent: true, opacity: 0.94, envMapIntensity: 0.04,
   });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = windUniforms.uTime;
@@ -112,36 +318,18 @@ export function makeWaterMaterial(color = 0x3f7288) {
 //  GRASS FIELD (instanced wind-swayed blades)
 // ===========================================================================
 export function buildGrassField(parent) {
-  const m = M();
-  // A clump of 3 small tapered blades (merged) — reads as real grass, not shards.
-  const clumpGeos = [];
-  for (let i = 0; i < 3; i++) {
-    const w = 0.032, h = 0.17 + i * 0.035;
-    const g = new THREE.BufferGeometry();
-    // tapered triangle: wide base, pointed tip, slightly curved
-    const verts = new Float32Array([
-      -w, 0, 0,   w, 0, 0,   0.012, h, 0.03,
-    ]);
-    g.setAttribute('position', new THREE.BufferAttribute(verts, 3));
-    g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array([0, 0.3, 1, 0, 0.3, 1, 0, 0.3, 1]), 3));
-    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0.5, 1]), 2));
-    g.rotateY((i / 3) * Math.PI * 2 + Math.random() * 0.4);
-    g.translate((Math.random() - 0.5) * 0.07, 0, (Math.random() - 0.5) * 0.07);
-    clumpGeos.push(g);
-  }
-  const clumpGeo = trackGeo(mergeGeometries(clumpGeos, false));
-  clumpGeos.forEach(g => g.dispose());
-
-  const mat = makeGrassMaterial(0x5e8a3f);
-  const COUNT = 5000;
-  const inst = new THREE.InstancedMesh(clumpGeo, mat, COUNT);
+  const T = getLeafTextures();
+  const geo = trackGeo(crossedCardGeometry(0.42, 0.30));
+  geo.translate(0, 0.15, 0);
+  const mat = makeCardMaterial(T.grass, { alphaTest: 0.34, swayAmp: 0.16, swaySpeed: 1.35 });
+  const COUNT = 4200;
+  const inst = new THREE.InstancedMesh(geo, mat, COUNT);
   inst.name = 'grassField';
-  inst.receiveShadow = false; inst.castShadow = false;
+  inst.castShadow = false; inst.receiveShadow = false;
   const d = new THREE.Object3D();
+  const color = new THREE.Color();
   const TOWN = 44;
   let i = 0, guard = 0;
-  // per-instance tint variation
-  const color = new THREE.Color();
   while (i < COUNT && guard < COUNT * 6) {
     guard++;
     const x = (Math.random() - 0.5) * TOWN * 1.9;
@@ -149,13 +337,13 @@ export function buildGrassField(parent) {
     if (Math.abs(x) < 5.2 || Math.abs(z) < 5.2) continue;
     if (Math.hypot(x, z) < 11.5) continue;
     if (Math.hypot(x + 26, z - 26) < 8) continue;
-    d.position.set(x, 0, z);
+    d.position.set(x, 0.02, z);
     d.rotation.set(0, Math.random() * Math.PI * 2, 0);
-    const s = 0.8 + Math.random() * 0.8;
-    d.scale.set(s, s * (0.85 + Math.random() * 0.5), s);
+    const sc = 0.65 + Math.random() * 0.75;
+    d.scale.set(sc, sc * (0.8 + Math.random() * 0.45), sc);
     d.updateMatrix();
     inst.setMatrixAt(i, d.matrix);
-    color.setHSL(0.25 + Math.random() * 0.05, 0.45 + Math.random() * 0.2, 0.28 + Math.random() * 0.12);
+    color.setHSL(0.26 + Math.random() * 0.06, 0.25 + Math.random() * 0.15, 0.42 + Math.random() * 0.14);
     inst.setColorAt(i, color);
     i++;
   }
@@ -167,100 +355,120 @@ export function buildGrassField(parent) {
 }
 
 // ===========================================================================
-//  FLOWER BEDS — all beds collect into a few global InstancedMeshes (low draw calls)
+//  FLOWER BEDS — instanced alpha cards with painted blossoms
 // ===========================================================================
-const flowerRegistry = { stems: [], blooms: {} };
-const PALETTE_KEYS = ['petalPink','petalRed','petalYellow','petalWhite'];
+const flowerRegistry = { mats: [] };
+
 export function buildFlowerBed(parent, cx, cz, radius, count = 120) {
   const d = new THREE.Object3D();
   for (let i = 0; i < count; i++) {
     const a = Math.random() * Math.PI * 2;
     const rr = Math.sqrt(Math.random()) * radius;
-    const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
-    const s = 0.85 + Math.random() * 0.5;
-    d.position.set(x, 0, z);
-    d.rotation.set(0, Math.random() * Math.PI, 0);
+    d.position.set(cx + Math.cos(a) * rr, 0, cz + Math.sin(a) * rr);
+    d.rotation.set(0, Math.random() * Math.PI * 2, 0);
+    const s = 0.8 + Math.random() * 0.6;
     d.scale.set(s, s, s);
     d.updateMatrix();
-    flowerRegistry.stems.push(d.matrix.clone());
-    const col = PALETTE_KEYS[Math.floor(Math.random() * PALETTE_KEYS.length)];
-    // bloom matrix at stem top
-    const bm = new THREE.Matrix4().copy(d.matrix);
-    const pos = new THREE.Vector3().setFromMatrixPosition(d.matrix);
-    const sc = new THREE.Vector3().setFromMatrixScale(d.matrix);
-    d.position.set(pos.x, 0.34 * sc.y, pos.z);
-    d.scale.set(sc.x * 1.15, sc.y * 1.15, sc.z * 1.15);
-    d.updateMatrix();
-    (flowerRegistry.blooms[col] ||= []).push(d.matrix.clone());
+    flowerRegistry.mats.push(d.matrix.clone());
   }
 }
 
-// Finalize all collected flowers into instanced meshes (call once after all beds)
 export function flushFlowers(parent) {
-  const m = M();
-  const stemGeo = trackGeo(new THREE.CylinderGeometry(0.015, 0.022, 0.34, 4));
-  stemGeo.translate(0, 0.17, 0);
-  const stemMat = makeGrassMaterial(0x5a8a44);
-  const stemInst = new THREE.InstancedMesh(stemGeo, stemMat, flowerRegistry.stems.length);
-  stemInst.name = 'flowerStems';
-  stemInst.castShadow = false; stemInst.receiveShadow = false;
-  flowerRegistry.stems.forEach((mx, i) => stemInst.setMatrixAt(i, mx));
-  stemInst.instanceMatrix.needsUpdate = true;
-  parent.add(stemInst);
-
-  const bloomGeo = trackGeo(new THREE.IcosahedronGeometry(0.075, 0));
-  for (const key of PALETTE_KEYS) {
-    const list = flowerRegistry.blooms[key];
-    if (!list || !list.length) continue;
-    const mat = makeFoliageMaterial(m[key].color.getHex(), 0.05, 1.1);
-    const inst = new THREE.InstancedMesh(bloomGeo, mat, list.length);
-    inst.name = 'blooms_' + key;
-    list.forEach((mx, i) => inst.setMatrixAt(i, mx));
-    inst.instanceMatrix.needsUpdate = true;
-    inst.castShadow = false; inst.receiveShadow = false;
-    parent.add(inst);
-  }
+  if (!flowerRegistry.mats.length) return;
+  const T = getLeafTextures();
+  const geo = trackGeo(crossedCardGeometry(0.6, 0.55));
+  geo.translate(0, 0.27, 0);
+  const mat = makeCardMaterial(T.flower, { alphaTest: 0.3, swayAmp: 0.12, swaySpeed: 1.5 });
+  const inst = new THREE.InstancedMesh(geo, mat, flowerRegistry.mats.length);
+  inst.name = 'flowerCards';
+  inst.castShadow = false; inst.receiveShadow = false;
+  flowerRegistry.mats.forEach((mx, i) => inst.setMatrixAt(i, mx));
+  inst.instanceMatrix.needsUpdate = true;
+  parent.add(inst);
 }
 
 // ===========================================================================
-//  WILLOW TREE — trunk + merged drooping strand geometry (1 draw call)
+//  WILLOW TREE — bark trunk + painted leaf cards + hanging strand cards
 // ===========================================================================
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-
 export function buildWillow(parent, x, z, scale = 1) {
   const m = M();
+  const T = getLeafTextures();
   const g = new THREE.Group();
   g.position.set(x, 0, z);
-  const trunkH = 3.4 * scale;
-  const trunk = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.18 * scale, 0.34 * scale, trunkH, 7)), m.trunk);
+  const trunkH = 3.2 * scale;
+  const trunk = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.18 * scale, 0.34 * scale, trunkH, 8)), m.trunk);
   trunk.position.y = trunkH / 2; trunk.castShadow = true; g.add(trunk);
 
-  // canopy mass
-  const canopyMat = makeFoliageMaterial(0x7aa855, 0.10, 0.8);
-  const canopy = new THREE.Mesh(trackGeo(new THREE.IcosahedronGeometry(1.4 * scale, 1)), canopyMat);
-  canopy.position.y = trunkH + 0.6 * scale; canopy.scale.set(1.3, 0.9, 1.3); canopy.castShadow = true; g.add(canopy);
-
-  // drooping strands merged into one geometry
-  const strandGeos = [];
-  const N = 26;
-  for (let i = 0; i < N; i++) {
-    const sg = new THREE.PlaneGeometry(0.14 * scale, 2.2 * scale, 1, 4);
-    sg.translate(0, -1.1 * scale, 0);
-    const a = (i / N) * Math.PI * 2;
-    const rr = 0.9 * scale + Math.random() * 0.4 * scale;
-    sg.rotateY(a + Math.PI / 2);
-    sg.rotateZ((Math.random() - 0.5) * 0.2);
-    sg.translate(Math.cos(a) * rr, trunkH + 1.0 * scale, Math.sin(a) * rr);
-    strandGeos.push(sg);
+  // canopy: leaf cards
+  const canopyMat = makeCardMaterial(T.leaf, { alphaTest: 0.36, swayAmp: 0.10, swaySpeed: 0.85 });
+  const canopyGeo = trackGeo(crossedCardGeometry(4.6 * scale, 3.4 * scale));
+  for (let i = 0; i < 3; i++) {
+    const card = new THREE.Mesh(canopyGeo, canopyMat);
+    card.position.set((Math.random() - 0.5) * 0.8 * scale, trunkH + (0.6 + i * 0.5) * scale, (Math.random() - 0.5) * 0.8 * scale);
+    card.rotation.y = Math.random() * Math.PI;
+    card.castShadow = true;
+    g.add(card);
   }
-  const merged = mergeGeometries(strandGeos, false);
-  strandGeos.forEach(sg => sg.dispose());
-  const strandMat = makeFoliageMaterial(0x8fb85e, 0.18, 1.4);
-  const strands = new THREE.Mesh(trackGeo(merged), strandMat);
-  strands.castShadow = false; g.add(strands);
+  // hanging willow strands (alpha cards)
+  const strandMat = makeCardMaterial(T.willow, { alphaTest: 0.28, swayAmp: 0.2, swaySpeed: 1.5 });
+  const strandGeo = trackGeo(new THREE.PlaneGeometry(1.5 * scale, 3.2 * scale));
+  strandGeo.translate(0, -1.6 * scale, 0);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const s2 = new THREE.Mesh(strandGeo, strandMat);
+    s2.position.set(Math.cos(a) * 1.15 * scale, trunkH + 1.0 * scale, Math.sin(a) * 1.15 * scale);
+    s2.rotation.y = -a + Math.PI / 2;
+    g.add(s2);
+  }
 
   parent.add(g);
   colliders.push({ minX: x - 0.4, maxX: x + 0.4, minZ: z - 0.4, maxZ: z + 0.4, top: trunkH, kind: 'tree' });
+  return g;
+}
+
+// ===========================================================================
+//  REAL TREE — bark trunk + branches + alpha leaf / blossom cards
+// ===========================================================================
+export function buildRealTree(parent, x, z, scale = 1, kind = 'green') {
+  const m = M();
+  const T = getLeafTextures();
+  const g = new THREE.Group();
+  g.position.set(x, 0, z);
+
+  const trunkH = 2.8 * scale;
+  const trunk = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.16 * scale, 0.32 * scale, trunkH, 8)), m.trunk);
+  trunk.position.y = trunkH / 2; trunk.castShadow = trunk.receiveShadow = true; g.add(trunk);
+
+  // branches
+  for (let b = 0; b < 3; b++) {
+    const a = (b / 3) * Math.PI * 2 + Math.random();
+    const br = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.05 * scale, 0.11 * scale, 1.5 * scale, 5)), m.trunk);
+    br.position.set(Math.cos(a) * 0.45 * scale, trunkH * 0.82, Math.sin(a) * 0.45 * scale);
+    br.rotation.set(Math.sin(a) * 0.75, 0, -Math.cos(a) * 0.75);
+    br.castShadow = true; g.add(br);
+  }
+
+  const tex = kind === 'blossom' ? T.blossom : (kind === 'dark' ? T.dark : T.leaf);
+  const mat = makeCardMaterial(tex, { alphaTest: 0.38, swayAmp: kind === 'blossom' ? 0.11 : 0.13, swaySpeed: 0.95 });
+  const cardGeo = trackGeo(crossedCardGeometry(2.9 * scale, 2.4 * scale));
+  const clusters = [
+    [0, trunkH + 0.9 * scale, 0, 1.1],
+    [0.85 * scale, trunkH + 1.35 * scale, 0.3 * scale, 0.9],
+    [-0.85 * scale, trunkH + 1.3 * scale, -0.25 * scale, 0.88],
+    [0.15 * scale, trunkH + 1.95 * scale, -0.35 * scale, 0.8],
+    [-0.35 * scale, trunkH + 0.55 * scale, 0.75 * scale, 0.75],
+  ];
+  for (const [bx, by, bz, scl] of clusters) {
+    const card = new THREE.Mesh(cardGeo, mat);
+    card.position.set(bx, by, bz);
+    card.rotation.set(0, Math.random() * Math.PI, 0);
+    card.scale.setScalar(scl);
+    card.castShadow = true;
+    g.add(card);
+  }
+
+  parent.add(g);
+  colliders.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 0.35, maxZ: z + 0.35, top: trunkH, kind: 'tree' });
   return g;
 }
 
@@ -503,12 +711,13 @@ export function buildGarden(parent, cx, cz, size = 12) {
 //  A couple of small scenic bushes with wind
 // ===========================================================================
 export function buildBush(parent, x, z, scale = 1) {
-  const m = M();
-  const mat = makeFoliageMaterial(0x5f8f4a, 0.1, 1.0);
-  const geo = trackGeo(new THREE.IcosahedronGeometry(0.6 * scale, 1));
+  const T = getLeafTextures();
+  const mat = makeCardMaterial(T.dark, { alphaTest: 0.36, swayAmp: 0.09, swaySpeed: 1.1 });
+  const geo = trackGeo(crossedCardGeometry(1.7 * scale, 1.4 * scale));
   const b = new THREE.Mesh(geo, mat);
-  b.position.set(x, 0.5 * scale, z);
-  b.scale.set(1.2, 0.9, 1.2); b.castShadow = true; parent.add(b);
+  b.position.set(x, 0.55 * scale, z);
+  b.rotation.y = Math.random() * Math.PI;
+  b.castShadow = true; parent.add(b);
 }
 
 // ===========================================================================

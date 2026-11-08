@@ -9,7 +9,7 @@ import { instantiate } from './assets.js';
 import {
   buildGrassField, buildFlowerBed, buildWillow, buildAnimatedPond,
   buildPavilion, buildRockery, buildGarden, buildBush, flushFlowers,
-  makeFoliageMaterial, buildSkyDecor,
+  makeFoliageMaterial, buildSkyDecor, buildRealTree,
 } from './scenery.js';
 
 export const TOWN = { half: 46 };        // playable half-size (scene doubled vs v1)
@@ -321,45 +321,8 @@ function buildLadder(parent, x, z, baseY, topY, facing) {
 //  TREE — trunk + 3 canopy blobs, grounded
 // ---------------------------------------------------------------------------
 function buildTree(parent, x, z, scale = 1) {
-  const m = M();
-  const g = new THREE.Group();
-  g.position.set(x, 0, z);
-  const trunkH = 2.7 * scale;
-  const trunk = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.14*scale, 0.3*scale, trunkH, 8)), m.trunk);
-  trunk.position.y = trunkH / 2; trunk.castShadow = trunk.receiveShadow = true; g.add(trunk);
-  // 3 branches
-  for (let b = 0; b < 3; b++) {
-    const a = (b / 3) * Math.PI * 2 + Math.random();
-    const br = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.05*scale, 0.1*scale, 1.4*scale, 5)), m.trunk);
-    br.position.set(Math.cos(a) * 0.45 * scale, trunkH * 0.8, Math.sin(a) * 0.45 * scale);
-    br.rotation.set(Math.sin(a) * 0.7, 0, -Math.cos(a) * 0.7);
-    br.castShadow = true; g.add(br);
-  }
-  // canopy: 7 blobs, two greens, flat shaded + gentle wind sway
-  const canopyMats = [
-    makeFoliageMaterial(0x5f8f4a, 0.08, 0.9),
-    makeFoliageMaterial(0x496f36, 0.08, 0.9),
-    makeFoliageMaterial(0x6fa054, 0.08, 0.9),
-  ];
-  const blobGeo = trackGeo(new THREE.IcosahedronGeometry(0.95 * scale, 1));
-  const blobs = [
-    [0, trunkH + 0.9*scale, 0, 1.15],
-    [0.8*scale, trunkH + 1.4*scale, 0.3*scale, 0.9],
-    [-0.8*scale, trunkH + 1.3*scale, -0.2*scale, 0.85],
-    [0.2*scale, trunkH + 2.0*scale, -0.5*scale, 0.8],
-    [-0.3*scale, trunkH + 1.9*scale, 0.7*scale, 0.78],
-    [0.9*scale, trunkH + 0.7*scale, -0.7*scale, 0.7],
-    [-0.9*scale, trunkH + 0.8*scale, 0.6*scale, 0.72],
-  ];
-  blobs.forEach(([bx, by, bz, ssz], i) => {
-    const c = new THREE.Mesh(blobGeo, canopyMats[i % 3]);
-    c.position.set(bx, by, bz);
-    c.scale.set(ssz, ssz * 0.9, ssz);
-    c.rotation.set(Math.random(), Math.random(), Math.random());
-    c.castShadow = true; g.add(c);
-  });
-  parent.add(g);
-  colliders.push({ minX: x-0.35, maxX: x+0.35, minZ: z-0.35, maxZ: z+0.35, top: trunkH, kind: 'tree' });
+  const kind = (Math.abs(x * 7 + z * 13) % 5 === 0) ? 'blossom' : 'green';
+  return buildRealTree(parent, x, z, scale, kind);
 }
 
 // ---------------------------------------------------------------------------
