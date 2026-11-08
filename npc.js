@@ -72,6 +72,11 @@ function addNPC(instance, opts) {
   instance.updateMatrixWorld(true);
   npc.footAxisL = computeFootPitchAxis(bones['FootL']);
   npc.footAxisR = computeFootPitchAxis(bones['FootR']);
+  // scales introduced by re-parenting must be restored after every mixer update
+  npc.footRestScale = {};
+  for (const nm of ['FootL','FootR','FrontFootL','FrontFootR','BackFootL','BackFootR']) {
+    if (bones[nm]) npc.footRestScale[nm] = bones[nm].scale.clone();
+  }
 
   let idle = playClip(instance, npc.idleClip || 'Idle', { speed: 0.9, register: false });
   if (!idle && instance.animations && instance.animations.length) {
@@ -215,9 +220,14 @@ export function applyGait(n, dt, moving, speed) {
   n.walkBlend += (target - n.walkBlend) * Math.min(1, dt * 12);
   const w = n.walkBlend;
 
+  const restoreFootScale = () => {
+    if (!n.footRestScale) return;
+    for (const nm in n.footRestScale) n.bones[nm].scale.copy(n.footRestScale[nm]);
+  };
   if (w < 0.01) {
     // restore rest pose when idle
     for (const name in n.rest) n.bones[name].quaternion.copy(n.rest[name]);
+    restoreFootScale();
     n.group.position.y = 0;
     return;
   }
@@ -248,8 +258,7 @@ export function applyGait(n, dt, moving, speed) {
     poseBone(n.bones, n.rest, 'UpperArmR', sw * 0.30 * w);
     // subtle vertical bob, twice per cycle (one per step)
     n.group.position.y = Math.abs(Math.sin(ph)) * 0.018 * w;
-    if (n.bones.FootL) n.bones.FootL.scale.setScalar(0.86);
-    if (n.bones.FootR) n.bones.FootR.scale.setScalar(0.86);
+    restoreFootScale();
   } else {
     // quadruped: diagonal gait (front-left with back-right)
     poseBone(n.bones, n.rest, 'FrontUpLegL', sw * 0.5 * w);
@@ -261,6 +270,7 @@ export function applyGait(n, dt, moving, speed) {
     poseBone(n.bones, n.rest, 'BackLowLegL', -Math.max(0, -swOpp) * 0.6 * w);
     poseBone(n.bones, n.rest, 'BackLowLegR', -Math.max(0, -sw) * 0.6 * w);
     n.group.position.y = Math.abs(Math.sin(ph * 2)) * 0.02 * w;
+    restoreFootScale();
   }
 }
 
