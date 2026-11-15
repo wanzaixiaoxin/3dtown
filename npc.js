@@ -37,6 +37,30 @@ function blocked(x, z, r = 0.35) {
 // Rotate a "facing angle" so a model whose front is +Z points along yaw.
 function faceYaw(yaw) { return yaw; }
 
+export function createGaitState(instance, type) {
+  const state = { group: instance, type, size: instance.userData.size, bones: {}, rest: {}, pitchAxes: {}, footRestScale: {}, footRestY: {} };
+  instance.traverse((o) => { if (o.isBone) state.bones[o.name] = o; });
+  const animatedBones = ['UpperLegL','UpperLegR','LowerLegL','LowerLegR','FootL','FootR','UpperArmL','UpperArmR',
+    'FrontUpLegL','FrontUpLegR','FrontLowLegL','FrontLowLegR','FrontFootL','FrontFootR',
+    'BackUpLegL','BackUpLegR','BackLowLegL','BackLowLegR','BackFootL','BackFootR'];
+  for (const name of animatedBones) {
+    if (state.bones[name]) state.rest[name] = state.bones[name].quaternion.clone();
+  }
+  state.walkPhase = Math.random() * Math.PI * 2;
+  state.walkBlend = 0;
+  instance.updateMatrixWorld(true);
+  for (const name of animatedBones) {
+    state.pitchAxes[name] = computePitchAxis(instance, state.bones[name]);
+  }
+  for (const nm of ['FootL','FootR','FrontFootL','FrontFootR','BackFootL','BackFootR']) {
+    if (state.bones[nm]) {
+      state.footRestScale[nm] = state.bones[nm].scale.clone();
+      state.footRestY[nm] = state.bones[nm].getWorldPosition(new THREE.Vector3()).y;
+    }
+  }
+  return state;
+}
+
 function addNPC(instance, opts) {
   scene.add(instance);
   const npc = {
@@ -56,28 +80,9 @@ function addNPC(instance, opts) {
     mixer: null,
     size: instance.userData.size,
   };
-  // start with idle
-  // bone map + rest pose (for procedural gait overlay)
-  const bones = {};
-  instance.traverse((o) => { if (o.isBone) bones[o.name] = o; });
-  npc.bones = bones;
-  npc.rest = {};
-  const animatedBones = ['UpperLegL','UpperLegR','LowerLegL','LowerLegR','UpperArmL','UpperArmR',
-    'FrontUpLegL','FrontUpLegR','FrontLowLegL','FrontLowLegR','BackUpLegL','BackUpLegR','BackLowLegL','BackLowLegR'];
-  for (const name of animatedBones) {
-    if (bones[name]) npc.rest[name] = bones[name].quaternion.clone();
-  }
-  npc.walkPhase = Math.random() * Math.PI * 2;
-  npc.walkBlend = 0;
-  instance.updateMatrixWorld(true);
-  npc.footAxisL = computeFootPitchAxis(bones['FootL']);
-  npc.footAxisR = computeFootPitchAxis(bones['FootR']);
-  // scales introduced by re-parenting must be restored after every mixer update
-  npc.footRestScale = {};
-  for (const nm of ['FootL','FootR','FrontFootL','FrontFootR','BackFootL','BackFootR']) {
-    if (bones[nm]) npc.footRestScale[nm] = bones[nm].scale.clone();
-  }
+  Object.assign(npc, createGaitState(instance, opts.type));
 
+  // start with idle
   let idle = playClip(instance, npc.idleClip || 'Idle', { speed: 0.9, register: false });
   if (!idle && instance.animations && instance.animations.length) {
     idle = playClip(instance, instance.animations[0].name, { speed: 0.9, register: false });
@@ -162,7 +167,7 @@ export function spawnNPCs(s, assets) {
     if (!inst) return;
     addNPC(inst, {
       type: 'animal', x, z,
-      speed: 0.75 + Math.random() * 0.3,
+      speed: 0.45 + Math.random() * 0.2,
       radius: 5 + Math.random() * 4,
       walkClip: 'Walk', idleClip: 'Idle',
     });
@@ -176,7 +181,7 @@ export function spawnNPCs(s, assets) {
     if (!inst) return;
     addNPC(inst, {
       type: 'animal', x, z,
-      speed: 1.4 + Math.random() * 0.5,
+      speed: 0.5 + Math.random() * 0.25,
       radius: 7 + Math.random() * 5,
       walkClip: 'Walk', idleClip: 'Idle',
     });
@@ -186,15 +191,6 @@ export function spawnNPCs(s, assets) {
 }
 
 const _qTmp = new THREE.Quaternion();
-const _xAxis = new THREE.Vector3(1, 0, 0);
-
-function poseBone(bones, rest, name, angle) {
-  const b = bones[name];
-  if (!b) return;
-  const r = rest[name];
-  if (r) b.quaternion.copy(r);
-  b.quaternion.multiply(_qTmp.setFromAxisAngle(_xAxis, angle));
-}
 
 function poseBoneAxis(bones, rest, name, axis, angle) {
   const b = bones[name];
@@ -204,18 +200,39 @@ function poseBoneAxis(bones, rest, name, axis, angle) {
   b.quaternion.multiply(_qTmp.setFromAxisAngle(axis, angle));
 }
 
-// the foot bone's local axis that corresponds to the character's side axis
-function computeFootPitchAxis(footBone) {
-  if (!footBone) return null;
-  const q = new THREE.Quaternion();
-  footBone.getWorldQuaternion(q);
-  return new THREE.Vector3(1, 0, 0).applyQuaternion(q.invert()).normalize();
+// Convert the character's sideways axis into each bone's local space. FBX bones
+// do not share a common local axis, even when their names are symmetrical.
+function computePitchAxis(root, bone) {
+  if (!bone) return null;
+  const rootQ = root.getWorldQuaternion(new THREE.Quaternion());
+  const boneQ = bone.getWorldQuaternion(new THREE.Quaternion());
+  return new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ).applyQuaternion(boneQ.invert()).normalize();
 }
 
 // Procedural walk cycle overlay: the FBX walk clips have very small leg swing,
 // so we drive thighs/shins/arms directly to get a readable, non-sliding gait.
-export function applyGait(n, dt, moving, speed) {
+function poseQuadrupedLeg(n, upper, lower, foot, upperAngle, flexion, hind = false) {
+  const lowerAngle = hind ? -flexion : flexion;
+  poseBoneAxis(n.bones, n.rest, upper, n.pitchAxes[upper], upperAngle);
+  poseBoneAxis(n.bones, n.rest, lower, n.pitchAxes[lower], lowerAngle);
+  poseBoneAxis(n.bones, n.rest, foot, n.pitchAxes[foot], -(upperAngle + lowerAngle) * 0.85);
+}
+
+const _footPosition = new THREE.Vector3();
+function groundFeet(n) {
+  let lowestOffset = Infinity;
+  for (const name in n.footRestY) {
+    const bone = n.bones[name];
+    if (!bone) continue;
+    const offset = bone.getWorldPosition(_footPosition).y - n.footRestY[name];
+    lowestOffset = Math.min(lowestOffset, offset);
+  }
+  if (Number.isFinite(lowestOffset)) n.group.position.y -= lowestOffset;
+}
+
+export function applyGait(n, dt, moving, speed, mode = 'walk') {
   const isVillager = n.type === 'villager';
+  const running = !isVillager && mode === 'run';
   const target = moving ? 1 : 0;
   n.walkBlend += (target - n.walkBlend) * Math.min(1, dt * 12);
   const w = n.walkBlend;
@@ -229,59 +246,80 @@ export function applyGait(n, dt, moving, speed) {
     for (const name in n.rest) n.bones[name].quaternion.copy(n.rest[name]);
     restoreFootScale();
     n.group.position.y = 0;
+    groundFeet(n);
     return;
   }
 
-  // stride frequency tied to actual speed (rad/s)
-  n.walkPhase += dt * (2.6 + speed * 3.4);
+  // Match stride frequency to actual speed and the animal's leg scale.
+  const walkRate = isVillager ? 2.6 + speed * 3.4 : 1.8 + speed * 4.0 / (n.size?.y || 1);
+  n.walkPhase += dt * (running ? 6.4 + speed * 1.8 : walkRate);
   const ph = n.walkPhase;
   const sw = Math.sin(ph);
   const swOpp = Math.sin(ph + Math.PI);
 
   if (isVillager) {
-    // natural walking amplitude (previous values made a "splits" pose)
-    const thighAmp = 0.40;
+    const thighAmp = 0.38;
     const thighL = sw * thighAmp * w;
     const thighR = swOpp * thighAmp * w;
-    poseBone(n.bones, n.rest, 'UpperLegL', thighL);
-    poseBone(n.bones, n.rest, 'UpperLegR', thighR);
-    // knee flexes during the swing phase (never hyper-extends)
-    const kneeL = Math.max(0, Math.cos(ph)) * 0.85 * w;
-    const kneeR = Math.max(0, Math.cos(ph + Math.PI)) * 0.85 * w;
-    poseBone(n.bones, n.rest, 'LowerLegL', -kneeL);
-    poseBone(n.bones, n.rest, 'LowerLegR', -kneeR);
-    // ankle keeps the sole roughly level
-    poseBoneAxis(n.bones, n.rest, 'FootL', n.footAxisL, -(thighL - kneeL) * 0.55);
-    poseBoneAxis(n.bones, n.rest, 'FootR', n.footAxisR, -(thighR - kneeR) * 0.55);
+    poseBoneAxis(n.bones, n.rest, 'UpperLegL', n.pitchAxes['UpperLegL'], thighL);
+    poseBoneAxis(n.bones, n.rest, 'UpperLegR', n.pitchAxes['UpperLegR'], thighR);
+    // Flex only the leg swinging forward; the supporting leg stays extended.
+    const kneeL = Math.max(0, -Math.cos(ph)) * 0.9 * w;
+    const kneeR = Math.max(0, -Math.cos(ph + Math.PI)) * 0.9 * w;
+    poseBoneAxis(n.bones, n.rest, 'LowerLegL', n.pitchAxes['LowerLegL'], kneeL);
+    poseBoneAxis(n.bones, n.rest, 'LowerLegR', n.pitchAxes['LowerLegR'], kneeR);
+    // Reset from rest every frame and counter-rotate the ankle to keep soles level.
+    poseBoneAxis(n.bones, n.rest, 'FootL', n.pitchAxes['FootL'], -(thighL + kneeL) * 0.85);
+    poseBoneAxis(n.bones, n.rest, 'FootR', n.pitchAxes['FootR'], -(thighR + kneeR) * 0.85);
     // arms swing opposite to the legs
-    poseBone(n.bones, n.rest, 'UpperArmL', swOpp * 0.30 * w);
-    poseBone(n.bones, n.rest, 'UpperArmR', sw * 0.30 * w);
-    // subtle vertical bob, twice per cycle (one per step)
-    n.group.position.y = Math.abs(Math.sin(ph)) * 0.018 * w;
+    poseBoneAxis(n.bones, n.rest, 'UpperArmL', n.pitchAxes['UpperArmL'], swOpp * 0.30 * w);
+    poseBoneAxis(n.bones, n.rest, 'UpperArmR', n.pitchAxes['UpperArmR'], sw * 0.30 * w);
+    // Lower the pelvis slightly at full stride instead of lifting both feet.
+    n.group.position.y = -Math.abs(sw) * 0.018 * w;
+    restoreFootScale();
+  } else if (running) {
+    const frontPhaseL = ph;
+    const frontPhaseR = ph + 0.28;
+    const backPhaseL = ph + Math.PI + 0.55;
+    const backPhaseR = ph + Math.PI + 0.83;
+    const frontL = Math.sin(frontPhaseL) * 0.62 * w;
+    const frontR = Math.sin(frontPhaseR) * 0.62 * w;
+    const backL = Math.sin(backPhaseL) * 0.72 * w;
+    const backR = Math.sin(backPhaseR) * 0.72 * w;
+    const flexFL = Math.max(0, -Math.cos(frontPhaseL)) * 1.05 * w;
+    const flexFR = Math.max(0, -Math.cos(frontPhaseR)) * 1.05 * w;
+    const flexBL = Math.max(0, -Math.cos(backPhaseL)) * 1.15 * w;
+    const flexBR = Math.max(0, -Math.cos(backPhaseR)) * 1.15 * w;
+    poseQuadrupedLeg(n, 'FrontUpLegL', 'FrontLowLegL', 'FrontFootL', frontL, flexFL);
+    poseQuadrupedLeg(n, 'FrontUpLegR', 'FrontLowLegR', 'FrontFootR', frontR, flexFR);
+    poseQuadrupedLeg(n, 'BackUpLegL', 'BackLowLegL', 'BackFootL', backL, flexBL, true);
+    poseQuadrupedLeg(n, 'BackUpLegR', 'BackLowLegR', 'BackFootR', backR, flexBR, true);
+    n.group.position.y = Math.pow(Math.max(0, Math.sin(ph + 0.4)), 3) * 0.06 * w;
     restoreFootScale();
   } else {
-    // quadruped: diagonal gait (front-left with back-right)
-    poseBone(n.bones, n.rest, 'FrontUpLegL', sw * 0.5 * w);
-    poseBone(n.bones, n.rest, 'FrontUpLegR', swOpp * 0.5 * w);
-    poseBone(n.bones, n.rest, 'BackUpLegL', swOpp * 0.48 * w);
-    poseBone(n.bones, n.rest, 'BackUpLegR', sw * 0.48 * w);
-    poseBone(n.bones, n.rest, 'FrontLowLegL', -Math.max(0, -sw) * 0.6 * w);
-    poseBone(n.bones, n.rest, 'FrontLowLegR', -Math.max(0, -swOpp) * 0.6 * w);
-    poseBone(n.bones, n.rest, 'BackLowLegL', -Math.max(0, -swOpp) * 0.6 * w);
-    poseBone(n.bones, n.rest, 'BackLowLegR', -Math.max(0, -sw) * 0.6 * w);
-    n.group.position.y = Math.abs(Math.sin(ph * 2)) * 0.02 * w;
+    const frontL = sw * 0.34 * w;
+    const frontR = swOpp * 0.34 * w;
+    const backL = swOpp * 0.32 * w;
+    const backR = sw * 0.32 * w;
+    const flexFL = Math.max(0, -Math.cos(ph)) * 0.65 * w;
+    const flexFR = Math.max(0, Math.cos(ph)) * 0.65 * w;
+    const flexBL = Math.max(0, Math.cos(ph)) * 0.65 * w;
+    const flexBR = Math.max(0, -Math.cos(ph)) * 0.65 * w;
+    poseQuadrupedLeg(n, 'FrontUpLegL', 'FrontLowLegL', 'FrontFootL', frontL, flexFL);
+    poseQuadrupedLeg(n, 'FrontUpLegR', 'FrontLowLegR', 'FrontFootR', frontR, flexFR);
+    poseQuadrupedLeg(n, 'BackUpLegL', 'BackLowLegL', 'BackFootL', backL, flexBL, true);
+    poseQuadrupedLeg(n, 'BackUpLegR', 'BackLowLegR', 'BackFootR', backR, flexBR, true);
+    n.group.position.y = -Math.abs(sw) * 0.012 * w;
     restoreFootScale();
   }
+  if (!running) groundFeet(n);
 }
 
 export function updateNPCs(dt, nightAmount = 0) {
   const tmp = new THREE.Vector3();
   for (const n of npcs) {
-    // animations
     if (n.mixer) n.mixer.update(dt);
-
     n.waitT -= dt;
-    const moving = n.vel.lengthSq() > 0.05;
 
     if (n.waitT <= 0 && n.target.distanceTo(n.pos) < 0.6) {
       n.waitT = 2 + Math.random() * 4;
@@ -299,7 +337,6 @@ export function updateNPCs(dt, nightAmount = 0) {
     if (dist > 0.5) {
       tmp.normalize();
       desiredYaw = Math.atan2(tmp.x, tmp.z);
-      // turn in place first when the target is far off-axis
       const dy0 = ((desiredYaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
       const turnFactor = Math.abs(dy0) > 0.9 ? 0.15 : 1.0;
       const sp = n.speed * (nightAmount > 0.5 ? 0.6 : 1) * turnFactor;
@@ -309,13 +346,13 @@ export function updateNPCs(dt, nightAmount = 0) {
       n.vel.multiplyScalar(0.8);
     }
 
+    const previousX = n.pos.x, previousZ = n.pos.z;
     let nx = n.pos.x + n.vel.x * dt;
     let nz = n.pos.z + n.vel.z * dt;
     [nx, nz] = separate(nx, nz, 0.45);
     [nx, nz] = clampTown(nx, nz);
     n.pos.x = nx; n.pos.z = nz;
 
-    // keep NPCs out of water entirely
     for (const c of colliders) {
       if (!c.water) continue;
       const cx = (c.minX + c.maxX) / 2, cz = (c.minZ + c.maxZ) / 2;
@@ -328,30 +365,40 @@ export function updateNPCs(dt, nightAmount = 0) {
       }
     }
 
+    const moveX = n.pos.x - previousX, moveZ = n.pos.z - previousZ;
+    const actualSpeed = Math.hypot(moveX, moveZ) / Math.max(dt, 0.0001);
+    const nowMoving = actualSpeed > 0.08;
+    if (nowMoving) n.yaw = Math.atan2(moveX, moveZ);
+
+    if (actualSpeed < 0.04 && dist > 0.5) {
+      n.stuckT = (n.stuckT || 0) + dt;
+      if (n.stuckT > 0.8) {
+        n.target.copy(n.pos);
+        n.waitT = 0;
+        n.vel.set(0, 0, 0);
+        n.stuckT = 0;
+      }
+    } else {
+      n.stuckT = 0;
+    }
+
     n.group.position.x = n.pos.x;
     n.group.position.z = n.pos.z;
-
-    // smooth rotate toward movement direction
     const dy = ((n.yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
     if (Math.abs(dy) > 0.7) {
-      n.group.rotation.y = n.yaw;       // snap: never walk sideways/backwards
+      n.group.rotation.y = n.yaw;
     } else {
       n.group.rotation.y += dy * Math.min(1, dt * 14);
     }
 
-    // switch anim clip based on movement; sync playback speed to actual velocity
-    const curSpeed = Math.hypot(n.vel.x, n.vel.z);
-    const nowMoving = moving && curSpeed > 0.15;
     if (nowMoving) {
-      // clip's natural stride covers ~1.3 m/s; scale timeScale accordingly
-      const clipSpeed = Math.min(1.6, Math.max(0.5, curSpeed / 1.3));
+      const naturalSpeed = n.type === 'villager' ? 1.3 : 0.55;
+      const clipSpeed = Math.min(1.6, Math.max(0.5, actualSpeed / naturalSpeed));
       switchClip(n, n.walkClip, clipSpeed);
     } else {
       switchClip(n, n.idleClip, 1.0);
     }
-
-    // procedural gait overlay (legs bend & arms swing, no foot sliding)
-    applyGait(n, dt, nowMoving, curSpeed);
+    applyGait(n, dt, nowMoving, actualSpeed);
   }
 }
 

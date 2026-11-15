@@ -335,7 +335,7 @@ export function buildGrassField(parent) {
   const COUNT = 4200;
   const inst = new THREE.InstancedMesh(geo, mat, COUNT);
   inst.name = 'grassField';
-  inst.castShadow = false; inst.receiveShadow = false;
+  inst.castShadow = true; inst.receiveShadow = true;
   const d = new THREE.Object3D();
   const color = new THREE.Color();
   const TOWN = 44;
@@ -391,7 +391,7 @@ export function flushFlowers(parent) {
   const mat = makeCardMaterial(T.flower, { alphaTest: 0.3, swayAmp: 0.12, swaySpeed: 1.5 });
   const inst = new THREE.InstancedMesh(geo, mat, flowerRegistry.mats.length);
   inst.name = 'flowerCards';
-  inst.castShadow = false; inst.receiveShadow = false;
+  inst.castShadow = true; inst.receiveShadow = true;
   flowerRegistry.mats.forEach((mx, i) => inst.setMatrixAt(i, mx));
   inst.instanceMatrix.needsUpdate = true;
   parent.add(inst);
@@ -416,7 +416,7 @@ export function buildWillow(parent, x, z, scale = 1) {
     const card = new THREE.Mesh(canopyGeo, canopyMat);
     card.position.set((Math.random() - 0.5) * 0.8 * scale, trunkH + (0.6 + i * 0.5) * scale, (Math.random() - 0.5) * 0.8 * scale);
     card.rotation.y = Math.random() * Math.PI;
-    card.castShadow = true;
+    card.castShadow = card.receiveShadow = true;
     g.add(card);
   }
   // hanging willow strands (alpha cards)
@@ -428,6 +428,7 @@ export function buildWillow(parent, x, z, scale = 1) {
     const s2 = new THREE.Mesh(strandGeo, strandMat);
     s2.position.set(Math.cos(a) * 1.15 * scale, trunkH + 1.0 * scale, Math.sin(a) * 1.15 * scale);
     s2.rotation.y = -a + Math.PI / 2;
+    s2.castShadow = s2.receiveShadow = true;
     g.add(s2);
   }
 
@@ -473,7 +474,7 @@ export function buildRealTree(parent, x, z, scale = 1, kind = 'green') {
     card.position.set(bx, by, bz);
     card.rotation.set(0, Math.random() * Math.PI, 0);
     card.scale.setScalar(scl);
-    card.castShadow = true;
+    card.castShadow = card.receiveShadow = true;
     g.add(card);
   }
 
@@ -727,7 +728,7 @@ export function buildBush(parent, x, z, scale = 1) {
   const b = new THREE.Mesh(geo, mat);
   b.position.set(x, 0.55 * scale, z);
   b.rotation.y = Math.random() * Math.PI;
-  b.castShadow = true; parent.add(b);
+  b.castShadow = b.receiveShadow = true; parent.add(b);
 }
 
 // ===========================================================================
@@ -838,7 +839,7 @@ export function buildPine(parent, x, z, scale = 1) {
     const card = new THREE.Mesh(trackGeo(crossedCardGeometry(w, h)), mat);
     card.position.y = trunkH * (0.55 + t * 0.42);
     card.rotation.y = Math.random() * Math.PI;
-    card.castShadow = true;
+    card.castShadow = card.receiveShadow = true;
     g.add(card);
   }
   parent.add(g);
@@ -877,7 +878,7 @@ export function buildBamboo(parent, x, z, count = 9, scale = 1) {
     const a = Math.random() * Math.PI * 2;
     const r = Math.random() * 1.8 * scale;
     const sx = Math.cos(a) * r, sz = Math.sin(a) * r;
-    const h = (4.5 + Math.random() * 3.5) * scale;
+    const h = (3.8 + Math.random() * 2.4) * scale;
     const stalk = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.045 * scale, 0.07 * scale, h, 5)), stalkMat);
     stalk.position.set(sx, h / 2, sz);
     stalk.rotation.z = (Math.random() - 0.5) * 0.08;
@@ -894,6 +895,7 @@ export function buildBamboo(parent, x, z, count = 9, scale = 1) {
       const card = new THREE.Mesh(trackGeo(crossedCardGeometry(1.5 * scale, 1.5 * scale)), leafMat);
       card.position.set(sx + (Math.random() - 0.5) * 0.5, h * (0.72 + k * 0.14), sz + (Math.random() - 0.5) * 0.5);
       card.rotation.y = Math.random() * Math.PI;
+      card.castShadow = card.receiveShadow = true;
       g.add(card);
     }
   }

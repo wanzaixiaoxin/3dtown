@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>资产预览 · 古镇漫游</title>
+<link rel="stylesheet" href="./preview.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./index.html" aria-label="返回古镇漫游">
+      <span class="seal">镇</span>
+      <span><strong>古镇资产馆</strong><small>ASSET EXPLORER</small></span>
+    </a>
+    <div class="topbar-right">
+      <span class="asset-total">18 个模型 · 4 个分类</span>
+      <a class="home-link" href="./index.html">返回古镇</a>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar">
+      <label class="search">
+        <span>模型检索</span>
+        <input id="searchInput" type="search" placeholder="搜索当前分类" autocomplete="off" />
+      </label>
+      <nav class="categories" aria-label="资产分类">
+        <button class="category active" data-category="npc"><span>NPC</span><small>动物与家畜</small><b>7</b></button>
+        <button class="category" data-category="people"><span>人物</span><small>村民角色</small><b>3</b></button>
+        <button class="category" data-category="buildings"><span>建筑</span><small>民居与农场</small><b>6</b></button>
+        <button class="category" data-category="objects"><span>物体</span><small>陈设与设施</small><b>2</b></button>
+      </nav>
+      <div class="list-heading"><span id="categoryTitle">NPC</span><small id="listCount">7 个模型</small></div>
+      <div class="model-list" id="modelList"></div>
+    </aside>
+
+    <main class="viewport" id="viewport">
+      <div class="viewport-heading">
+        <div><span class="eyebrow" id="assetCategory">NPC / 动态模型</span><h1 id="assetName">正在载入</h1></div>
+        <span class="live-badge" id="liveBadge">准备中</span>
+      </div>
+
+      <div class="loading" id="loading"><span class="spinner"></span><p id="loadingText">正在加载模型…</p></div>
+      <div class="load-error" id="loadError" hidden><strong>模型加载失败</strong><p id="errorText"></p><button id="retryButton">重新加载</button></div>
+
+      <section class="asset-details" aria-label="模型信息">
+        <div><span>文件</span><strong id="assetFile">—</strong></div>
+        <div><span>尺寸</span><strong id="assetSize">—</strong></div>
+        <div><span>动画</span><strong id="assetClips">—</strong></div>
+      </section>
+
+      <div class="viewport-hint">拖动旋转 · 滚轮缩放 · 右键平移</div>
+
+      <section class="control-dock" aria-label="预览控制">
+        <label class="control clip-control"><span>动画片段</span><select id="clipSelect" disabled><option>加载中</option></select></label>
+        <label class="control speed-control"><span>播放速度 <output id="speedValue">1.0×</output></span><input id="speedInput" type="range" min="0.2" max="2" step="0.1" value="1" /></label>
+        <button class="control-button" id="playButton" disabled>暂停动画</button>
+        <label class="rotate-control"><input id="rotateInput" type="checkbox" checked /><span>自动环绕</span></label>
+        <button class="control-button secondary" id="resetButton">重置视角</button>
+      </section>
+    </main>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="./preview.js"></script>
+</body>
+</html>

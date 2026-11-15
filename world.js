@@ -711,7 +711,7 @@ export function buildWorld(scene, assets = null) {
     if (Math.abs(x) < 7 || Math.abs(z) < 7) return; // roads
     if (Math.hypot(x + 13, z - 20) < 8) return;   // pavilion
     if (Math.hypot(x - 30, z + 34) < 10) return;  // garden
-    buildTree(world, x, z, 0.9 + (i % 4) * 0.18);
+    buildTree(world, x, z, 0.85 + (i % 4) * 0.12);
   });
 
   // --- street lamps along the lanes ---
@@ -769,7 +769,7 @@ export function buildWorld(scene, assets = null) {
   const bushSpots = [[-12, 26],[10, 34],[-38, 8],[36, 8],[26, 20],[-24, -30],[30, -18],[-8, -34]];
   bushSpots.forEach(([bx, bz], i) => {
     if (Math.abs(bx) < 7 || Math.abs(bz) < 7) return;
-    buildBush(world, bx, bz, 0.9 + (i % 3) * 0.3);
+    buildBush(world, bx, bz, 0.65 + (i % 3) * 0.18);
   });
 
   // --- pines, bamboo, waterfall, ceremonial props ---

@@ -246,10 +246,9 @@ export function M() {
       roughnessMap: pbrMap('granite', 'rough', 2),
     }),
     stoneLt:     std({
-      color: 0xf2ece2, roughness: 0.9,
+      color: 0xf2ece2, roughness: 1.0, envMapIntensity: 0.22,
       map: pbrMap('granite', 'color', 2) || stoneTex,
       normalMap: pbrMap('granite', 'normal', 2),
-      roughnessMap: pbrMap('granite', 'rough', 2),
     }),
     stoneDk:     std({
       color: 0xb9b2a6, roughness: 1.0,
@@ -271,10 +270,9 @@ export function M() {
       normalScale: new THREE.Vector2(0.8, 0.8),
     }),
     wallStone:   std({
-      color: 0xb9bfc2, roughness: 0.82,
+      color: 0xb9bfc2, roughness: 1.0, envMapIntensity: 0.18,
       map: pbrMap('brick', 'color', 14) || stoneWallTex,
       normalMap: pbrMap('brick', 'normal', 14),
-      roughnessMap: pbrMap('brick', 'rough', 14),
     }),
     gold:        std({ color: 0xd8b25a, roughness: 0.35, metalness: 0.65 }),
     leaf:        std({ color: 0x5f8f4a, roughness: 0.92 }),
