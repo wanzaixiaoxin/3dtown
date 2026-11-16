@@ -190,12 +190,44 @@ export async function preloadAssets(onProgress) {
 // need a proper skeleton clone — use THREE's clone for skinned via SkeletonUtils.
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 
-export function instantiate(template, { x = 0, z = 0, rotY = 0, scale = 1 } = {}) {
+const SKIN_TONES = [0xd8a97f, 0xc58d64, 0x9c6647, 0xe5b793, 0x70452f, 0xb97d5c];
+const CLOTH_COLORS = [0x496a86, 0x8e4b3f, 0x547147, 0x80623c, 0x765b8b, 0xa27c3d, 0x3e7b72];
+
+function applyCharacterVariant(root, variant) {
+  const skin = new THREE.Color(SKIN_TONES[variant % SKIN_TONES.length]);
+  const cloth = new THREE.Color(CLOTH_COLORS[(variant * 3 + 1) % CLOTH_COLORS.length]);
+  root.traverse(mesh => {
+    if (!mesh.isSkinnedMesh) return;
+    mesh.frustumCulled = false;
+    const source = mesh.geometry.getAttribute('color');
+    if (!source) return;
+    mesh.geometry = mesh.geometry.clone();
+    const colors = mesh.geometry.getAttribute('color');
+    for (let i = 0; i < source.count; i++) {
+      const r = source.getX(i), g = source.getY(i), b = source.getZ(i);
+      const isSkin = r > 0.16 && g > 0.05 && r > g * 1.03 && g > b * 1.01;
+      const isCoolCloth = (b >= r || g >= r) && Math.max(r, g, b) > 0.18 && Math.max(r, g, b) - Math.min(r, g, b) > 0.06;
+      const isCloth = !isSkin && isCoolCloth && Math.min(r, g, b) < 0.75;
+      if (!isSkin && !isCloth) continue;
+      const color = isSkin ? skin : cloth;
+      colors.setXYZ(i,
+        color.r * 0.85 + r * 0.15,
+        color.g * 0.85 + g * 0.15,
+        color.b * 0.85 + b * 0.15,
+      );
+    }
+    colors.needsUpdate = true;
+  });
+}
+
+export function instantiate(template, { x = 0, z = 0, rotY = 0, scale = 1, variant = 0 } = {}) {
   if (!template) return null;
   const obj = skeletonClone(template);
   obj.position.set(x, 0, z);
   obj.rotation.y = rotY;
   obj.scale.setScalar(scale);
+  obj.traverse(mesh => { if (mesh.isSkinnedMesh) mesh.frustumCulled = false; });
+  if (variant) applyCharacterVariant(obj, variant);
   // SkeletonUtils.clone JSON-serializes userData (destroying AnimationClips),
   // so re-attach the live clips from the template as a direct property.
   obj.animations = template.animations || [];

@@ -14,6 +14,11 @@ const contactShadowMaterial = new THREE.MeshBasicMaterial({
   color: 0x11140f, transparent: true, opacity: 0.2, depthWrite: false,
   polygonOffset: true, polygonOffsetFactor: -1,
 });
+const VISIT_POINTS = [
+  ...SHOPS.map(shop => ({ id: shop.id, customer: shop.customer, keeper: shop.keeper, sign: shop.sign })),
+  { id: 'well', customer: { x: 0, z: 2.2 }, keeper: { x: 0, z: -1.5 }, sign: '取水' },
+  { id: 'pavilion', customer: { x: -9.5, z: 17 }, keeper: { x: -13, z: 20 }, sign: '观景' },
+];
 
 function clampTown(x, z) {
   const lim = TOWN.half - 3;
@@ -87,6 +92,10 @@ function addNPC(instance, opts) {
     radius: opts.radius,
     role: opts.role || 'wander',
     routeIndex: opts.routeIndex || 0,
+    itinerary: opts.itinerary || null,
+    variant: opts.variant || 0,
+    interactionT: 0,
+    gestureT: 2 + Math.random() * 5,
     yaw: opts.faceYaw ?? Math.random() * Math.PI * 2,
     waitT: Math.random() * 2.5,
     walkClip: opts.walkClip,     // 'Man_Walk' / 'Walk'
@@ -154,24 +163,39 @@ export function spawnNPCs(s, assets) {
   if (!assets) return npcs;
 
   const villagerKinds = ['manA', 'woman', 'manB', 'manA', 'woman', 'manB', 'manA', 'woman', 'manB', 'manA', 'woman', 'manB'];
-  villagerKinds.forEach((kind, i) => {
+  for (let i = 0; i < 18; i++) {
+    const kind = villagerKinds[i % villagerKinds.length];
     const keeper = i < 6;
-    const shop = SHOPS[keeper ? (i * 2) % SHOPS.length : (i * 3) % SHOPS.length];
-    if (!shop) return;
-    const spot = keeper ? shop.keeper : shop.customer;
+    const traveler = i >= 14;
+    const role = keeper ? 'keeper' : traveler ? 'traveler' : 'visitor';
+    const shop = SHOPS[(i * 3) % SHOPS.length];
+    let spot = keeper ? SHOPS[(i * 2) % SHOPS.length].keeper : shop.customer;
+    let itinerary = null;
+    if (traveler) {
+      const gateX = i % 2 === 0 ? -1.5 : 1.5;
+      spot = { x: gateX, z: 39.5 + (i - 14) * 0.65 };
+      itinerary = [
+        { x: gateX, z: 38 },
+        { x: gateX * 0.7, z: 24 },
+        { x: shop.customer.x, z: shop.customer.z, shopId: shop.id },
+        { x: gateX, z: 41 },
+      ];
+    }
     const [x, z] = freeSpot(spot.x, spot.z);
-    const inst = instantiate(assets[kind], { x, z });
-    if (!inst) return;
+    const inst = instantiate(assets[kind], { x, z, variant: i + 1 });
+    if (!inst) continue;
     addNPC(inst, {
       type: 'villager', x, z,
-      speed: keeper ? 0 : 0.75 + Math.random() * 0.25,
+      speed: keeper ? 0 : (0.7 + (i % 5) * 0.09) * (traveler ? 1.1 : 1),
       radius: 4,
-      role: keeper ? 'keeper' : 'visitor',
+      role,
       routeIndex: (i * 3) % SHOPS.length,
-      faceYaw: keeper ? (shop.side < 0 ? Math.PI / 2 : -Math.PI / 2) : undefined,
+      itinerary,
+      variant: i + 1,
+      faceYaw: keeper ? (SHOPS[(i * 2) % SHOPS.length].side < 0 ? Math.PI / 2 : -Math.PI / 2) : undefined,
       walkClip: 'Walk', idleClip: 'Idle',
     });
-  });
+  }
 
   // Farm animals — cows, sheep, pigs (animated Walk/Idle)
   const animalSpots = [
@@ -236,7 +260,7 @@ function poseQuadrupedLeg(n, upper, lower, foot, upperAngle, flexion, hind = fal
 }
 
 const _footPosition = new THREE.Vector3();
-function groundFeet(n) {
+function groundFeet(n, dt) {
   let lowestOffset = Infinity;
   for (const name in n.footRestY) {
     const bone = n.bones[name];
@@ -244,7 +268,11 @@ function groundFeet(n) {
     const offset = bone.getWorldPosition(_footPosition).y - n.footRestY[name];
     lowestOffset = Math.min(lowestOffset, offset);
   }
-  if (Number.isFinite(lowestOffset)) n.group.position.y -= lowestOffset;
+  if (!Number.isFinite(lowestOffset)) return;
+  const targetY = n.group.position.y - lowestOffset;
+  if (n.groundY === undefined) n.groundY = targetY;
+  n.groundY += (targetY - n.groundY) * Math.min(1, dt * 18);
+  n.group.position.y = n.groundY;
 }
 
 export function applyGait(n, dt, moving, speed, mode = 'walk') {
@@ -263,7 +291,7 @@ export function applyGait(n, dt, moving, speed, mode = 'walk') {
     for (const name in n.rest) n.bones[name].quaternion.copy(n.rest[name]);
     restoreFootScale();
     n.group.position.y = 0;
-    groundFeet(n);
+    groundFeet(n, dt);
     return;
   }
 
@@ -329,7 +357,52 @@ export function applyGait(n, dt, moving, speed, mode = 'walk') {
     n.group.position.y = -Math.abs(sw) * 0.012 * w;
     restoreFootScale();
   }
-  if (!running) groundFeet(n);
+  if (!running) groundFeet(n, dt);
+}
+
+function facePoint(n, x, z, dt) {
+  const yaw = Math.atan2(x - n.pos.x, z - n.pos.z);
+  const dy = ((yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
+  n.group.rotation.y += dy * Math.min(1, dt * 9);
+}
+
+function interactionClip(n) {
+  return n.variant % 3 === 0 ? 'Man Clapping' : 'Man Standing';
+}
+
+function updateKeeper(n, dt) {
+  n.vel.set(0, 0, 0);
+  n.group.position.x = n.pos.x;
+  n.group.position.z = n.pos.z;
+  n.gestureT -= dt;
+  let guest = null, best = 2.8;
+  for (const other of npcs) {
+    if (other === n || (other.role !== 'visitor' && other.role !== 'traveler')) continue;
+    const d = Math.hypot(other.pos.x - n.pos.x, other.pos.z - n.pos.z);
+    if (d < best) { best = d; guest = other; }
+  }
+  if (guest && n.gestureT <= 0) {
+    n.interactionT = 1.8 + (n.variant % 3) * 0.6;
+    n.gestureT = 5 + Math.random() * 4;
+  }
+  n.interactionT = Math.max(0, n.interactionT - dt);
+  if (n.interactionT > 0 && guest) {
+    facePoint(n, guest.pos.x, guest.pos.z, dt);
+    switchClip(n, interactionClip(n), 0.9);
+  } else {
+    facePoint(n, n.pos.x + Math.sin(n.yaw), n.pos.z + Math.cos(n.yaw), dt);
+    switchClip(n, n.idleClip, 0.9);
+  }
+  applyGait(n, dt, false, 0);
+}
+
+function updateInteraction(n, dt) {
+  if (!n.targetShopId) return false;
+  const point = VISIT_POINTS.find(p => p.id === n.targetShopId);
+  if (!point) return false;
+  facePoint(n, point.keeper.x, point.keeper.z, dt);
+  switchClip(n, interactionClip(n), 0.85);
+  return true;
 }
 
 export function updateNPCs(dt, nightAmount = 0) {
@@ -337,23 +410,24 @@ export function updateNPCs(dt, nightAmount = 0) {
   for (const n of npcs) {
     if (n.mixer) n.mixer.update(dt);
     if (n.role === 'keeper') {
-      n.vel.set(0, 0, 0);
-      n.group.position.x = n.pos.x;
-      n.group.position.z = n.pos.z;
-      const dy = ((n.yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
-      n.group.rotation.y += dy * Math.min(1, dt * 8);
-      switchClip(n, n.idleClip, 0.9);
-      applyGait(n, dt, false, 0);
+      updateKeeper(n, dt);
       continue;
     }
     n.waitT -= dt;
 
     if (n.waitT <= 0 && n.target.distanceTo(n.pos) < 0.6) {
-      n.waitT = 2 + Math.random() * 4;
-      if (n.role === 'visitor') {
-        const shop = SHOPS[n.routeIndex % SHOPS.length];
-        n.routeIndex = (n.routeIndex + 1) % SHOPS.length;
-        n.target.set(shop.customer.x, 0, shop.customer.z);
+      n.waitT = n.role === 'traveler' ? 0.8 + Math.random() * 1.5 : 2 + (n.variant % 4) + Math.random() * 2;
+      n.targetShopId = null;
+      if (n.itinerary) {
+        const point = n.itinerary[n.routeIndex % n.itinerary.length];
+        n.routeIndex = (n.routeIndex + 1) % n.itinerary.length;
+        n.target.set(point.x, 0, point.z);
+        n.targetShopId = point.shopId || null;
+      } else if (n.role === 'visitor') {
+        const point = VISIT_POINTS[n.routeIndex % VISIT_POINTS.length];
+        n.routeIndex = (n.routeIndex + 1) % VISIT_POINTS.length;
+        n.target.set(point.customer.x, 0, point.customer.z);
+        n.targetShopId = point.id;
       } else {
         const a = Math.random() * Math.PI * 2;
         const rr = Math.random() * n.radius;
@@ -447,7 +521,7 @@ export function updateNPCs(dt, nightAmount = 0) {
       const naturalSpeed = n.type === 'villager' ? 1.3 : 0.55;
       const clipSpeed = Math.min(1.6, Math.max(0.5, actualSpeed / naturalSpeed));
       switchClip(n, n.walkClip, clipSpeed);
-    } else {
+    } else if (!updateInteraction(n, dt)) {
       switchClip(n, n.idleClip, 1.0);
     }
     applyGait(n, dt, nowMoving, actualSpeed);
