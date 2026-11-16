@@ -133,9 +133,11 @@ async function init() {
 
 function initRenderer() {
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.shadowMap.needsUpdate = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -175,6 +177,7 @@ function bindUI() {
     btn.addEventListener('click', () => {
       currentTime = btn.dataset.time;
       applyTime(currentTime);
+      renderer.shadowMap.needsUpdate = true;
       document.querySelectorAll('[data-time]').forEach(b => b.classList.toggle('active', b === btn));
       renderer.toneMappingExposure = getExposure();
       updateHUD();
@@ -581,7 +584,7 @@ function animate() {
 function onResize() {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
   renderer.setSize(w, h);
   if (post) { post.setSize(w, h); }
 }

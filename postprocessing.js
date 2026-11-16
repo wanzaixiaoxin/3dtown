@@ -118,6 +118,10 @@ export function createPost(renderer, scene, camera, quality = 'high') {
     grade,
     quality,
     render(dt) {
+      if (this.quality === 'low') {
+        renderer.render(scene, camera);
+        return;
+      }
       grade.uniforms.uTime.value += dt;
       composer.render(dt);
     },

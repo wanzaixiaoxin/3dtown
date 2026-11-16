@@ -5,9 +5,15 @@
 import * as THREE from 'three';
 import { instantiate, playClip, mixers } from './assets.js';
 import { TOWN, colliders } from './world.js';
+import { SHOPS } from './commerce.js';
 
 export const npcs = [];
 let scene = null;
+const contactShadowGeometry = new THREE.CircleGeometry(1, 16);
+const contactShadowMaterial = new THREE.MeshBasicMaterial({
+  color: 0x11140f, transparent: true, opacity: 0.2, depthWrite: false,
+  polygonOffset: true, polygonOffsetFactor: -1,
+});
 
 function clampTown(x, z) {
   const lim = TOWN.half - 3;
@@ -63,6 +69,12 @@ export function createGaitState(instance, type) {
 }
 
 function addNPC(instance, opts) {
+  instance.traverse(o => { if (o.isMesh) o.castShadow = false; });
+  const contactShadow = new THREE.Mesh(contactShadowGeometry, contactShadowMaterial);
+  contactShadow.rotation.x = -Math.PI / 2;
+  contactShadow.position.y = 0.025;
+  contactShadow.scale.setScalar(opts.type === 'villager' ? 0.34 : 0.62);
+  instance.add(contactShadow);
   scene.add(instance);
   const npc = {
     group: instance,
@@ -73,7 +85,9 @@ function addNPC(instance, opts) {
     speed: opts.speed,
     home: new THREE.Vector2(opts.x, opts.z),
     radius: opts.radius,
-    yaw: Math.random() * Math.PI * 2,
+    role: opts.role || 'wander',
+    routeIndex: opts.routeIndex || 0,
+    yaw: opts.faceYaw ?? Math.random() * Math.PI * 2,
     waitT: Math.random() * 2.5,
     walkClip: opts.walkClip,     // 'Man_Walk' / 'Walk'
     idleClip: opts.idleClip,     // 'Man_Idle' / 'Idle'
@@ -139,20 +153,22 @@ export function spawnNPCs(s, assets) {
   scene = s;
   if (!assets) return npcs;
 
-  // Villagers — mix of man/woman, placed around plaza & lanes
-  const villagerSpots = [
-    [-8, -8, 'manA'], [8, -8, 'woman'], [-8, 8, 'manB'], [8, 8, 'manA'],
-    [-4, 4, 'woman'], [4, -4, 'manB'], [-16, 0, 'manA'], [16, 4, 'woman'],
-    [0, 16, 'manB'], [0, -16, 'manA'], [-14, -14, 'woman'], [14, 14, 'manB'],
-  ];
-  villagerSpots.forEach(([ox, oz, kind]) => {
-    const [x, z] = freeSpot(ox, oz);
+  const villagerKinds = ['manA', 'woman', 'manB', 'manA', 'woman', 'manB', 'manA', 'woman', 'manB', 'manA', 'woman', 'manB'];
+  villagerKinds.forEach((kind, i) => {
+    const keeper = i < 6;
+    const shop = SHOPS[keeper ? (i * 2) % SHOPS.length : (i * 3) % SHOPS.length];
+    if (!shop) return;
+    const spot = keeper ? shop.keeper : shop.customer;
+    const [x, z] = freeSpot(spot.x, spot.z);
     const inst = instantiate(assets[kind], { x, z });
     if (!inst) return;
     addNPC(inst, {
       type: 'villager', x, z,
-      speed: 1.0 + Math.random() * 0.35,
-      radius: 6 + Math.random() * 4,
+      speed: keeper ? 0 : 0.75 + Math.random() * 0.25,
+      radius: 4,
+      role: keeper ? 'keeper' : 'visitor',
+      routeIndex: (i * 3) % SHOPS.length,
+      faceYaw: keeper ? (shop.side < 0 ? Math.PI / 2 : -Math.PI / 2) : undefined,
       walkClip: 'Walk', idleClip: 'Idle',
     });
   });
@@ -320,16 +336,32 @@ export function updateNPCs(dt, nightAmount = 0) {
   const tmp = new THREE.Vector3();
   for (const n of npcs) {
     if (n.mixer) n.mixer.update(dt);
+    if (n.role === 'keeper') {
+      n.vel.set(0, 0, 0);
+      n.group.position.x = n.pos.x;
+      n.group.position.z = n.pos.z;
+      const dy = ((n.yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
+      n.group.rotation.y += dy * Math.min(1, dt * 8);
+      switchClip(n, n.idleClip, 0.9);
+      applyGait(n, dt, false, 0);
+      continue;
+    }
     n.waitT -= dt;
 
     if (n.waitT <= 0 && n.target.distanceTo(n.pos) < 0.6) {
       n.waitT = 2 + Math.random() * 4;
-      const a = Math.random() * Math.PI * 2;
-      const rr = Math.random() * n.radius;
-      let tx = n.home.x + Math.cos(a) * rr;
-      let tz = n.home.y + Math.sin(a) * rr;
-      [tx, tz] = clampTown(tx, tz);
-      if (!blocked(tx, tz)) n.target.set(tx, 0, tz);
+      if (n.role === 'visitor') {
+        const shop = SHOPS[n.routeIndex % SHOPS.length];
+        n.routeIndex = (n.routeIndex + 1) % SHOPS.length;
+        n.target.set(shop.customer.x, 0, shop.customer.z);
+      } else {
+        const a = Math.random() * Math.PI * 2;
+        const rr = Math.random() * n.radius;
+        let tx = n.home.x + Math.cos(a) * rr;
+        let tz = n.home.y + Math.sin(a) * rr;
+        [tx, tz] = clampTown(tx, tz);
+        if (!blocked(tx, tz)) n.target.set(tx, 0, tz);
+      }
     }
 
     tmp.copy(n.target).sub(n.pos); tmp.y = 0;

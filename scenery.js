@@ -1196,11 +1196,15 @@ export function buildBanner(parent, x, z, text = '酒', rotY = 0) {
   pole.position.y = poleH / 2; pole.castShadow = true; g.add(pole);
   const arm = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.9, 0.07, 0.07)), m.woodDark);
   arm.position.set(0.42, poleH - 0.15, 0); g.add(arm);
-  const mat = new THREE.MeshStandardMaterial({ map: bannerTexture(text), side: THREE.DoubleSide, roughness: 0.9, transparent: true });
+  const mat = new THREE.MeshStandardMaterial({ map: bannerTexture(text), side: THREE.FrontSide, roughness: 0.9, transparent: true });
   const cloth = new THREE.Mesh(trackGeo(new THREE.PlaneGeometry(0.8, 1.5, 4, 4)), mat);
   cloth.position.set(0.78, poleH - 1.0, 0);
   cloth.name = 'banner-cloth';
   g.add(cloth);
+  const backCloth = cloth.clone();
+  backCloth.rotation.y = Math.PI;
+  backCloth.position.z -= 0.01;
+  g.add(backCloth);
   parent.add(g);
   colliders.push({ minX: x - 0.2, maxX: x + 0.2, minZ: z - 0.2, maxZ: z + 0.2, top: poleH, kind: 'prop' });
   return g;

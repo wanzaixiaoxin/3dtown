@@ -36,12 +36,38 @@ function convertMaterials(root) {
   });
 }
 
+function flattenSolidSkinnedMaterials(root) {
+  root.traverse(mesh => {
+    if (!mesh.isSkinnedMesh || !Array.isArray(mesh.material) || !mesh.geometry.groups.length) return;
+    const materials = mesh.material;
+    if (materials.some(m => m.map || m.transparent)) return;
+    const geometry = mesh.geometry;
+    const count = geometry.attributes.position.count;
+    const colors = new Float32Array(count * 3).fill(1);
+    for (const group of geometry.groups) {
+      const material = materials[group.materialIndex];
+      if (!material || !material.color) continue;
+      const { r, g, b } = material.color;
+      for (let i = group.start; i < group.start + group.count; i++) {
+        const vertex = geometry.index ? geometry.index.getX(i) : i;
+        colors[vertex * 3] = r;
+        colors[vertex * 3 + 1] = g;
+        colors[vertex * 3 + 2] = b;
+      }
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.clearGroups();
+    mesh.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
+  });
+}
+
 // Load an FBX and return a normalized "template" group.
 // targetHeight: desired height in meters (null = keep relative). grounds at y=0.
 export function loadFBX(url, { targetHeight = null, targetFootprint = null, faceForward = true, feetScale = 1, charFacePlusX = false, modelYaw = 0, fixFeetRig = false } = {}) {
   return new Promise((resolve, reject) => {
     loader.load(url, (obj) => {
       convertMaterials(obj);
+      flattenSolidSkinnedMaterials(obj);
       // Shrink oversized shoes on Quaternius characters (scale foot bones).
       if (feetScale !== 1) {
         obj.traverse((o) => {

@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { M, trackGeo, disposables } from './materials.js';
 import { batchStatic } from './optimize.js';
 import { instantiate } from './assets.js';
+import { SHOPS, buildCommerce } from './commerce.js';
 import {
   buildGrassField, buildFlowerBed, buildWillow, buildAnimatedPond,
   buildPavilion, buildRockery, buildGarden, buildBush, flushFlowers,
@@ -858,25 +859,14 @@ function placeAssets(parent, assets) {
     addPropCollider(x, z, Math.max(s.x, 3.2), Math.max(s.z, 3.2), s.y, 'house');
   }
 
-  const shopZ = [-38, -31.5, -25, -18.5, 18.5, 25, 31.5, 38];
-  const shopSigns = ['酒', '茶', '布', '药', '客栈', '米', '瓷', '书'];
-  for (const side of [-1, 1]) {
-    shopZ.forEach((z, i) => {
-      const x = side * 10.1;
-      if (Math.hypot(x + 13, z - 20) < 8.5) return;
-      const rotY = side < 0 ? -Math.PI / 2 : Math.PI / 2;
-      buildHouse(parent, x, z, 4.8, 3.4, 8.4, {
-        rotY, name: 'shop', stories: 3, roofH: 1.8,
-        roofMat: i % 3 === 0 ? m.roofBrown : m.roofBlue,
-        wallMat: i % 2 === 0 ? m.plasterWarm : m.plaster,
-      });
-      if (i % 2 === 0) {
-        const bannerX = side * 6.4;
-        const bannerYaw = side < 0 ? 0 : Math.PI;
-        buildBanner(parent, bannerX, z, shopSigns[(i + (side > 0 ? 3 : 0)) % shopSigns.length], bannerYaw);
-      }
+  SHOPS.forEach((shop, i) => {
+    buildHouse(parent, shop.x, shop.z, 4.8, 3.4, 8.4, {
+      rotY: shop.rotY, name: 'shop', stories: 3, roofH: 1.8,
+      roofMat: i % 3 === 0 ? m.roofBrown : m.roofBlue,
+      wallMat: i % 2 === 0 ? m.plasterWarm : m.plaster,
     });
-  }
+  });
+  buildCommerce(parent, colliders, buildBanner);
 
   // 3) Windmill + barn + chicken coop in the outskirts (characterful silhouettes)
   const farms = [
