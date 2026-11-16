@@ -69,7 +69,7 @@ const GradeShader = {
 export function createPost(renderer, scene, camera, quality = 'high') {
   const w = window.innerWidth, h = window.innerHeight;
   const composer = new EffectComposer(renderer);
-  composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  composer.setPixelRatio(renderer.getPixelRatio());
   composer.setSize(w, h);
 
   const renderPass = new RenderPass(scene, camera);
@@ -101,8 +101,8 @@ export function createPost(renderer, scene, camera, quality = 'high') {
 
   // Cinematic grade
   const grade = new ShaderPass(GradeShader);
-  grade.uniforms.uVignette.value = 0.32;
-  grade.uniforms.uGrain.value = 0.03;
+  grade.uniforms.uVignette.value = 0.22;
+  grade.uniforms.uGrain.value = 0.012;
   composer.addPass(grade);
 
   // FXAA

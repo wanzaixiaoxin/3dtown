@@ -21,20 +21,20 @@ const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').mat
 // player config (walkSpeed is user-adjustable via settings)
 const PLAYER = {
   radius: 0.38, eyeHeight: 1.66,
-  walkSpeed: 3.4, runSpeed: 7.4, climbSpeed: 2.6,
+  walkSpeed: 2.4, runSpeed: 5.2, climbSpeed: 2.6,
   jumpSpeed: 6.4, gravity: 20,
 };
 
 // user settings (persisted)
 const settings = {
-  sensitivity: 1.0,
-  fov: 70,
-  walkSpeed: 3.4,
+  sensitivity: 0.8,
+  fov: 60,
+  walkSpeed: 2.4,
   invertY: false,
   quality: 'medium',
   weather: 'clear',
 };
-const SETTINGS_KEY = 'guzhen-settings-v2';
+const SETTINGS_KEY = 'guzhen-settings-v3';
 function loadSettings() {
   try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch {}
   PLAYER.walkSpeed = settings.walkSpeed;
@@ -55,7 +55,7 @@ const player = {
   pos: new THREE.Vector3(0, 0, 14),
   vel: new THREE.Vector3(),
   onGround: true, climbing: false,
-  yaw: Math.PI, pitch: 0.0, currentLadder: null,
+  yaw: Math.PI, pitch: 0.0, lookYaw: Math.PI, lookPitch: 0.0, currentLadder: null,
 };
 
 // scratch
@@ -133,7 +133,7 @@ async function init() {
 
 function initRenderer() {
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -267,7 +267,7 @@ function bindUI() {
   document.addEventListener('mousemove', (e) => {
     if (view !== 'fp' || !pointerLocked) return;
     if (skipMouse > 0) { skipMouse--; return; }
-    const s = settings.sensitivity * 0.0022;
+    const s = settings.sensitivity * 0.0016;
     player.yaw -= e.movementX * s;
     player.pitch += (settings.invertY ? 1 : -1) * e.movementY * s;
     player.pitch = Math.max(-1.45, Math.min(1.45, player.pitch));
@@ -292,6 +292,8 @@ function setView(v) {
   } else {
     orbit.enabled = false;
     player.climbing = false;
+    player.lookYaw = player.yaw;
+    player.lookPitch = player.pitch;
     player.vel.set(0, 0, 0);
     if (player.pos.y > 3) player.pos.set(player.pos.x, 0, player.pos.z);
   }
@@ -417,7 +419,7 @@ function updatePlayer(dt) {
 
   // horizontal
   const speed = (running ? PLAYER.runSpeed : PLAYER.walkSpeed) * (getNightAmount() > 0.5 ? 0.9 : 1);
-  const accel = player.onGround ? 16 : 5;
+  const accel = player.onGround ? 9 : 4;
   player.vel.x += (wish.x * speed - player.vel.x) * Math.min(1, accel * dt);
   player.vel.z += (wish.z * speed - player.vel.z) * Math.min(1, accel * dt);
   // deadzone: kill tiny residual velocity so the camera never drifts on its own
@@ -446,14 +448,21 @@ function updatePlayer(dt) {
 // ===========================================================================
 //  CAMERA
 // ===========================================================================
-function updateCamera() {
+function updateCamera(dt) {
   if (view === 'fp') {
+    const blend = REDUCED_MOTION ? 1 : 1 - Math.exp(-dt * 18);
+    const yawDelta = Math.atan2(
+      Math.sin(player.yaw - player.lookYaw),
+      Math.cos(player.yaw - player.lookYaw),
+    );
+    player.lookYaw += yawDelta * blend;
+    player.lookPitch += (player.pitch - player.lookPitch) * blend;
     _fpEye.set(player.pos.x, player.pos.y + PLAYER.eyeHeight, player.pos.z);
     camera.position.copy(_fpEye);
     _fpDir.set(
-      -Math.sin(player.yaw) * Math.cos(player.pitch),
-      Math.sin(player.pitch),
-      -Math.cos(player.yaw) * Math.cos(player.pitch)
+      -Math.sin(player.lookYaw) * Math.cos(player.lookPitch),
+      Math.sin(player.lookPitch),
+      -Math.cos(player.lookYaw) * Math.cos(player.lookPitch)
     );
     camera.lookAt(_fpEye.x + _fpDir.x, _fpEye.y + _fpDir.y, _fpEye.z + _fpDir.z);
   } else {
@@ -543,9 +552,10 @@ function drawMinimap() {
 //  LOOP
 // ===========================================================================
 function animate() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = clock.getDelta();
+  const dt = Math.min(rawDt, 0.1);
 
-  fpsFrames++; fpsAccum += dt;
+  fpsFrames++; fpsAccum += rawDt;
   if (fpsAccum >= 0.5) {
     document.getElementById('statFps').textContent = Math.round(fpsFrames / fpsAccum);
     fpsFrames = 0; fpsAccum = 0;
@@ -558,7 +568,7 @@ function animate() {
   updateBoats(clock.elapsedTime);
   updateMist(clock.elapsedTime);
   updateRain(camera);
-  updateCamera();
+  updateCamera(dt);
 
   // minimap at ~15fps
   mmFrame += dt;
@@ -571,7 +581,7 @@ function animate() {
 function onResize() {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setSize(w, h);
   if (post) { post.setSize(w, h); }
 }
@@ -601,5 +611,8 @@ init().catch((e) => {
   console.error('init failed:', e);
   const fb = document.getElementById('fallback'), ld = document.getElementById('loader');
   if (ld) ld.style.display = 'none';
-  if (fb) fb.style.display = 'grid';
+  if (fb) {
+    fb.style.display = 'grid';
+    fb.querySelector('p').textContent = `古镇初始化失败：${e.message}。请刷新页面后重试。`;
+  }
 });

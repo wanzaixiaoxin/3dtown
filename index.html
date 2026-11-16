@@ -175,16 +175,16 @@
     <div class="panel" id="settings">
       <h3>设置</h3>
       <div class="field">
-        <label>鼠标灵敏度 <b id="sensVal">1.0</b></label>
-        <input type="range" id="sens" min="0.2" max="3" step="0.1" value="1" />
+        <label>鼠标灵敏度 <b id="sensVal">0.8</b></label>
+        <input type="range" id="sens" min="0.2" max="3" step="0.1" value="0.8" />
       </div>
       <div class="field">
-        <label>视野 FOV <b id="fovVal">70</b></label>
-        <input type="range" id="fov" min="55" max="100" step="1" value="70" />
+        <label>视野 FOV <b id="fovVal">60</b></label>
+        <input type="range" id="fov" min="50" max="85" step="1" value="60" />
       </div>
       <div class="field">
-        <label>行走速度 <b id="spdVal">3.4</b></label>
-        <input type="range" id="spd" min="2" max="6" step="0.2" value="3.4" />
+        <label>行走速度 <b id="spdVal">2.4</b></label>
+        <input type="range" id="spd" min="1.6" max="4" step="0.2" value="2.4" />
       </div>
       <div class="field">
         <label>天气 <b id="weatherVal">晴</b></label>
@@ -245,9 +245,10 @@
   </script>
 
   <script type="module">
-    function showFallback() {
+    function showFallback(detail) {
       document.getElementById('loader').style.display = 'none';
       document.getElementById('fallback').style.display = 'grid';
+      if (detail) document.querySelector('#fallback p').textContent = detail;
     }
     try {
       const c = document.createElement('canvas');
@@ -255,7 +256,10 @@
       if (!gl) { showFallback(); throw new Error('no-webgl'); }
     } catch (e) { showFallback(); throw e; }
     window.addEventListener('error', (e) => { if (String(e.message || '').includes('three')) showFallback(); });
-    import('./main.js?v=20261108b').catch((err) => { console.error(err); showFallback(); });
+    import('./main.js?v=20261115c').catch((err) => {
+      console.error(err);
+      showFallback(`三维引擎加载失败：${err.message}`);
+    });
   </script>
 </body>
 </html>

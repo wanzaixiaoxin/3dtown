@@ -229,8 +229,17 @@ function buildHouse(parent, x, z, w, d, h, opts = {}) {
     orn.castShadow = true; g.add(orn);
   }
 
+  const stories = opts.stories ?? (bodyH > 3.6 ? 2 : 1);
+  const storyH = bodyH / stories;
+  for (let level = 1; level < stories; level++) {
+    const floorBeam = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w + 0.12, 0.16, d + 0.12)), m.woodDark);
+    floorBeam.position.y = baseH + storyH * level;
+    floorBeam.castShadow = true;
+    g.add(floorBeam);
+  }
+
   // door (recessed, with frame)
-  const doorH = bodyH * 0.52, doorW = w * 0.26;
+  const doorH = Math.min(2.4, bodyH * 0.52), doorW = w * 0.26;
   const door = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW, doorH, 0.1)), m.wood);
   door.position.set(0, baseH + doorH / 2, -d / 2 - 0.02); g.add(door);
   const doorFrame = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW + 0.2, doorH + 0.16, 0.06)), m.woodDark);
@@ -238,14 +247,17 @@ function buildHouse(parent, x, z, w, d, h, opts = {}) {
 
   // windows (glowing at night) — lattice look via a lit material
   const winMat = opts.winMat || m.windowLit;
-  const winGeo = trackGeo(new THREE.BoxGeometry(w * 0.16, bodyH * 0.24, 0.08));
-  const winPos = [[-w*0.28, 0.55], [w*0.28, 0.55], [-w*0.28, 0.12], [w*0.28, 0.12]];
-  for (const [wx, wf] of winPos) {
-    const win = new THREE.Mesh(winGeo, winMat);
-    win.position.set(wx, baseH + bodyH * wf, -d/2 - 0.02);
-    g.add(win);
-    const frame = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w*0.16+0.14, bodyH*0.24+0.14, 0.05)), m.woodDark);
-    frame.position.set(wx, baseH + bodyH * wf, -d/2 + 0.02); g.add(frame);
+  const winH = Math.min(1.35, storyH * 0.42);
+  const winGeo = trackGeo(new THREE.BoxGeometry(w * 0.16, winH, 0.08));
+  for (let floor = 0; floor < stories; floor++) {
+    const wy = baseH + storyH * (floor + 0.58);
+    for (const wx of [-w * 0.28, w * 0.28]) {
+      const win = new THREE.Mesh(winGeo, winMat);
+      win.position.set(wx, wy, -d/2 - 0.02);
+      g.add(win);
+      const frame = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w*0.16+0.14, winH+0.14, 0.05)), m.woodDark);
+      frame.position.set(wx, wy, -d/2 + 0.02); g.add(frame);
+    }
   }
 
   // under-eave lanterns (glow at night)
@@ -507,7 +519,7 @@ export function setupEnvironment(scene) {
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 320;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
   sun.shadow.camera.top = S; sun.shadow.camera.bottom = -S;
-  sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03;
+  sun.shadow.bias = -0.0002; sun.shadow.normalBias = 0.05;
   scene.add(sun); scene.add(sun.target);
   env.sun = sun; env.sunLight = sun;
 
@@ -709,6 +721,7 @@ export function buildWorld(scene, assets = null) {
   treeSpots.forEach(([x,z], i) => {
     if (Math.hypot(x + 26, z - 26) < 10) return; // pond
     if (Math.abs(x) < 7 || Math.abs(z) < 7) return; // roads
+    if (Math.abs(Math.abs(x) - 10) < 4 && Math.abs(z) > 12) return; // shop rows
     if (Math.hypot(x + 13, z - 20) < 8) return;   // pavilion
     if (Math.hypot(x - 30, z + 34) < 10) return;  // garden
     buildTree(world, x, z, 0.85 + (i % 4) * 0.12);
@@ -819,6 +832,7 @@ function addPropCollider(x, z, w, d, top, kind = 'prop') {
 }
 
 function placeAssets(parent, assets) {
+  const m = M();
   const sz = (k) => (assets[k] && assets[k].userData.size) || { x: 2, y: 2, z: 2 };
 
   // 1) FBX well at plaza centre (replaces procedural well)
@@ -842,6 +856,26 @@ function placeAssets(parent, assets) {
     const inst = instantiate(assets[kind], { x, z, rotY });
     parent.add(inst);
     addPropCollider(x, z, Math.max(s.x, 3.2), Math.max(s.z, 3.2), s.y, 'house');
+  }
+
+  const shopZ = [-38, -31.5, -25, -18.5, 18.5, 25, 31.5, 38];
+  const shopSigns = ['酒', '茶', '布', '药', '客栈', '米', '瓷', '书'];
+  for (const side of [-1, 1]) {
+    shopZ.forEach((z, i) => {
+      const x = side * 10.1;
+      if (Math.hypot(x + 13, z - 20) < 8.5) return;
+      const rotY = side < 0 ? -Math.PI / 2 : Math.PI / 2;
+      buildHouse(parent, x, z, 4.8, 3.4, 8.4, {
+        rotY, name: 'shop', stories: 3, roofH: 1.8,
+        roofMat: i % 3 === 0 ? m.roofBrown : m.roofBlue,
+        wallMat: i % 2 === 0 ? m.plasterWarm : m.plaster,
+      });
+      if (i % 2 === 0) {
+        const bannerX = side * 6.4;
+        const bannerYaw = side < 0 ? 0 : Math.PI;
+        buildBanner(parent, bannerX, z, shopSigns[(i + (side > 0 ? 3 : 0)) % shopSigns.length], bannerYaw);
+      }
+    });
   }
 
   // 3) Windmill + barn + chicken coop in the outskirts (characterful silhouettes)

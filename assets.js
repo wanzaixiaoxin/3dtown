@@ -110,7 +110,7 @@ export const MODEL_SPECS = {
   house1:      { file: 'House1.fbx', targetHeight: 4.6 },
   house2:      { file: 'House2.fbx', targetHeight: 5.0 },
   building4:   { file: 'Building4.fbx', targetHeight: 10.2, targetFootprint: 5.2 },
-  building2s:  { file: 'Building2_Small.fbx', targetHeight: 4.2 },
+  building2s:  { file: 'Building2_Small.fbx', targetHeight: 4.2, targetFootprint: 4.8 },
   well:        { file: 'Well.fbx', targetHeight: 1.25 },
   windmill:    { file: 'Windmill.fbx', targetHeight: 8.0 },
   barn:        { file: 'Barn.fbx', targetHeight: 4.8 },

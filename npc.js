@@ -16,12 +16,13 @@ function clampTown(x, z) {
 
 // find a nearby free spot if the requested spawn is inside an obstacle
 function freeSpot(x, z) {
-  if (!blocked(x, z, 0.6)) return [x, z];
+  const occupied = (px, pz) => npcs.some(n => Math.hypot(n.pos.x - px, n.pos.z - pz) < 1.0);
+  if (!blocked(x, z, 0.6) && !occupied(x, z)) return [x, z];
   for (let r = 1.5; r <= 9; r += 1.5) {
     for (let a = 0; a < 12; a++) {
       const ang = (a / 12) * Math.PI * 2;
       const nx = x + Math.cos(ang) * r, nz = z + Math.sin(ang) * r;
-      if (!blocked(nx, nz, 0.6)) return clampTown(nx, nz);
+      if (!blocked(nx, nz, 0.6) && !occupied(nx, nz)) return clampTown(nx, nz);
     }
   }
   return clampTown(x, z);
@@ -365,9 +366,28 @@ export function updateNPCs(dt, nightAmount = 0) {
       }
     }
 
+    for (const other of npcs) {
+      if (other === n) continue;
+      let dx = n.pos.x - other.pos.x, dz = n.pos.z - other.pos.z;
+      let d = Math.hypot(dx, dz);
+      if (d < 0.001) {
+        const a = (npcs.indexOf(n) + 1) * 2.399;
+        dx = Math.cos(a) * 0.001; dz = Math.sin(a) * 0.001; d = 0.001;
+      }
+      const clearance = n.type === 'villager' && other.type === 'villager' ? 0.75 : 0.9;
+      if (d < clearance) {
+        const push = (clearance - d) * 0.5 / d;
+        n.pos.x += dx * push;
+        n.pos.z += dz * push;
+      }
+    }
+    [n.pos.x, n.pos.z] = separate(n.pos.x, n.pos.z, 0.45);
+    [n.pos.x, n.pos.z] = clampTown(n.pos.x, n.pos.z);
+
     const moveX = n.pos.x - previousX, moveZ = n.pos.z - previousZ;
     const actualSpeed = Math.hypot(moveX, moveZ) / Math.max(dt, 0.0001);
-    const nowMoving = actualSpeed > 0.08;
+    const nowMoving = n.locomotionMoving ? actualSpeed > 0.05 : actualSpeed > 0.12;
+    n.locomotionMoving = nowMoving;
     if (nowMoving) n.yaw = Math.atan2(moveX, moveZ);
 
     if (actualSpeed < 0.04 && dist > 0.5) {
