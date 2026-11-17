@@ -75,7 +75,9 @@
   /* settings drawer */
   #settings { top: 18px; right: 18px; width: 260px; padding: 16px; display: none; }
   #settings.show { display: block; }
-  #settings h3 { margin: 0 0 14px; font-size: 13px; letter-spacing: 2px; font-weight: 600; opacity: 0.9; }
+  #settings .settings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  #settings h3 { margin: 0; font-size: 13px; letter-spacing: 2px; font-weight: 600; opacity: 0.9; }
+  #settings .back-btn { padding: 5px 9px; font-size: 11px; letter-spacing: 0; }
   #settings .field { margin-bottom: 16px; }
   #settings .field:last-child { margin-bottom: 0; }
   #settings label { display: flex; justify-content: space-between; font-size: 12px; opacity: 0.75; margin-bottom: 8px; letter-spacing: 0.5px; }
@@ -173,7 +175,10 @@
     </div>
 
     <div class="panel" id="settings">
-      <h3>设置</h3>
+      <div class="settings-head">
+        <h3>设置</h3>
+        <button class="btn back-btn" id="btnSettingsBack" type="button">返回</button>
+      </div>
       <div class="field">
         <label>鼠标灵敏度 <b id="sensVal">0.8</b></label>
         <input type="range" id="sens" min="0.2" max="3" step="0.1" value="0.8" />
@@ -200,6 +205,10 @@
           <button class="btn qbtn" data-quality="medium">中</button>
           <button class="btn qbtn" data-quality="low">低</button>
         </div>
+      </div>
+      <div class="toggle-row">
+        <span>环境雾</span>
+        <label class="switch"><input type="checkbox" id="fogEnabled" /><span class="slider-sw"></span></label>
       </div>
       <div class="toggle-row">
         <span>反转 Y 轴</span>

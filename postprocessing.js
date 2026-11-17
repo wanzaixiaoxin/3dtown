@@ -89,10 +89,10 @@ export function createPost(renderer, scene, camera, quality = 'high') {
   }
 
   // Bloom — lantern/moon glow
-  const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.24, 0.55, 0.97);
-  bloom.threshold = 0.97;
-  bloom.strength = 0.24;
-  bloom.radius = 0.55;
+  const bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.1, 0.45, 1.08);
+  bloom.threshold = 1.08;
+  bloom.strength = 0.1;
+  bloom.radius = 0.45;
   if (quality !== 'low') composer.addPass(bloom);
 
   // Tone mapping + sRGB

@@ -8,7 +8,7 @@ import { M, disposables, setPBRTextures } from './materials.js';
 import {
   TOWN, colliders, ladders, world as worldRef,
   buildWorld, setupEnvironment, applyTime, getExposure, getTimeLabel, getNightAmount,
-  setEnvMaps, setWeatherMode,
+  setEnvMaps, setWeatherMode, setFogEnabled,
 } from './world.js';
 import { spawnNPCs, updateNPCs, npcs, applyGait } from './npc.js';
 import { updateWind, windUniforms, updateWaterfall, updateBoats, updateMist, updateRain, setRain } from './scenery.js';
@@ -31,6 +31,7 @@ const settings = {
   fov: 60,
   walkSpeed: 2.4,
   invertY: false,
+  fog: false,
   quality: 'medium',
   weather: 'clear',
 };
@@ -187,6 +188,7 @@ function bindUI() {
   // settings drawer
   const panel = document.getElementById('settings');
   document.getElementById('btnSettings').addEventListener('click', () => panel.classList.toggle('show'));
+  document.getElementById('btnSettingsBack').addEventListener('click', () => panel.classList.remove('show'));
 
   const sens = document.getElementById('sens');
   const sensVal = document.getElementById('sensVal');
@@ -249,6 +251,15 @@ function bindUI() {
   const inv = document.getElementById('invertY');
   inv.checked = settings.invertY;
   inv.addEventListener('change', () => { settings.invertY = inv.checked; saveSettings(); });
+
+  const fog = document.getElementById('fogEnabled');
+  fog.checked = settings.fog;
+  setFogEnabled(settings.fog);
+  fog.addEventListener('change', () => {
+    settings.fog = fog.checked;
+    setFogEnabled(settings.fog);
+    saveSettings();
+  });
 
   // keyboard
   window.addEventListener('keydown', (e) => {

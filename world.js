@@ -28,6 +28,7 @@ export let world;
 export const env = {
   sun: null, hemi: null, rim: null, ambient: null,
   skyMat: null, fog: null, scene: null,
+  mist: null, fogEnabled: false,
   sunLight: null, nightLights: [], // PointLights that turn on at night
   envMaps: null,                    // { morning, noon, afternoon, night } PMREM textures
   timeKey: 'noon',
@@ -498,10 +499,10 @@ export function setupEnvironment(scene) {
   env.skyMat = null;
   env.skyDecor = buildSkyDecor(scene);
   env.petals = buildPetals(scene, 38, 300);
-  buildMist(scene, 14);
+  env.mist = buildMist(scene, 14);
   buildRain(scene, 1800);
-  scene.fog = new THREE.Fog(0xc8d8e2, 70, 260);
-  env.fog = scene.fog;
+  env.fog = new THREE.Fog(0xc8d8e2, 70, 260);
+  scene.fog = null;
 
   // hemisphere fill
   env.hemi = new THREE.HemisphereLight(0xbfd4e8, 0x6b5a44, 1.0);
@@ -578,10 +579,15 @@ export function applyTime(key, instant = true) {
   // HDRI environment map (reflections + image based lighting)
   if (env.envMaps && env.envMaps[key] && env.scene) {
     env.scene.environment = env.envMaps[key];
-    const envInt = { morning: 0.5, noon: 0.35, afternoon: 0.55, night: 0.35 }[key] ?? 0.4;
-    for (const mat of disposables.materials) {
-      if ('envMapIntensity' in mat) mat.envMapIntensity = envInt;
-    }
+    const envInt = { morning: 0.12, noon: 0.1, afternoon: 0.14, night: 0.1 }[key] ?? 0.1;
+    env.scene.traverse((object) => {
+      const materials = Array.isArray(object.material) ? object.material : [object.material];
+      for (const mat of materials) {
+        if (!mat || !('envMapIntensity' in mat)) continue;
+        mat.userData.baseEnvMapIntensity ??= mat.envMapIntensity;
+        mat.envMapIntensity = mat.userData.baseEnvMapIntensity * envInt;
+      }
+    });
   }
 
   // sky decor: stars at night, clouds by day
@@ -597,6 +603,12 @@ export function applyTime(key, instant = true) {
 export function setWeatherMode(mode) {
   env.weather = mode;
   if (_curPreset) applyTime(env.timeKey);
+}
+
+export function setFogEnabled(enabled) {
+  env.fogEnabled = Boolean(enabled);
+  if (env.scene) env.scene.fog = env.fogEnabled ? env.fog : null;
+  if (env.mist) env.mist.visible = env.fogEnabled;
 }
 
 export function setEnvMaps(maps) {
