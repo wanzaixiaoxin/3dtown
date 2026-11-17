@@ -61,6 +61,21 @@ export function createGaitState(instance, type) {
   state.walkPhase = Math.random() * Math.PI * 2;
   state.walkBlend = 0;
   instance.updateMatrixWorld(true);
+  if (type === 'villager') {
+    for (const [name, direction] of [['FootL', -1], ['FootR', 1]]) {
+      const foot = state.bones[name];
+      if (!foot) continue;
+      const rootQ = instance.getWorldQuaternion(new THREE.Quaternion());
+      const footQ = foot.getWorldQuaternion(new THREE.Quaternion());
+      const localUp = new THREE.Vector3(0, 1, 0)
+        .applyQuaternion(rootQ)
+        .applyQuaternion(footQ.invert())
+        .normalize();
+      foot.quaternion.multiply(_qTmp.setFromAxisAngle(localUp, direction * THREE.MathUtils.degToRad(18)));
+      state.rest[name].copy(foot.quaternion);
+    }
+    instance.updateMatrixWorld(true);
+  }
   for (const name of animatedBones) {
     state.pitchAxes[name] = computePitchAxis(instance, state.bones[name]);
   }
@@ -303,7 +318,7 @@ export function applyGait(n, dt, moving, speed, mode = 'walk') {
   const swOpp = Math.sin(ph + Math.PI);
 
   if (isVillager) {
-    const thighAmp = 0.38;
+    const thighAmp = 0.26;
     const thighL = sw * thighAmp * w;
     const thighR = swOpp * thighAmp * w;
     poseBoneAxis(n.bones, n.rest, 'UpperLegL', n.pitchAxes['UpperLegL'], thighL);

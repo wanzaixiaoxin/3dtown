@@ -116,6 +116,7 @@ a { color: inherit; text-decoration: none; }
 .control-button:not(:disabled):hover { filter: brightness(1.1); }
 .rotate-control { display: flex; align-items: center; gap: 7px; flex: none; color: #c5ccc6; font-size: 12px; cursor: pointer; }
 .rotate-control input { accent-color: var(--jade); }
+.viewport:not([data-kind="model"]) .model-only { display: none; }
 
 @media (max-width: 980px) {
   .control-dock { gap: 12px; }

@@ -13,7 +13,7 @@
       <span><strong>古镇资产馆</strong><small>ASSET EXPLORER</small></span>
     </a>
     <div class="topbar-right">
-      <span class="asset-total">18 个模型 · 4 个分类</span>
+      <span class="asset-total">18 个模型 · 10 套材质 · 4 张 HDRI</span>
       <a class="home-link" href="./index.html">返回古镇</a>
     </div>
   </header>
@@ -29,6 +29,8 @@
         <button class="category" data-category="people"><span>人物</span><small>村民角色</small><b>3</b></button>
         <button class="category" data-category="buildings"><span>建筑</span><small>民居与农场</small><b>6</b></button>
         <button class="category" data-category="objects"><span>物体</span><small>陈设与设施</small><b>2</b></button>
+        <button class="category" data-category="textures"><span>材质</span><small>CC0 PBR 贴图</small><b>10</b></button>
+        <button class="category" data-category="hdri"><span>HDRI</span><small>环境光照</small><b>4</b></button>
       </nav>
       <div class="list-heading"><span id="categoryTitle">NPC</span><small id="listCount">7 个模型</small></div>
       <div class="model-list" id="modelList"></div>
@@ -43,18 +45,18 @@
       <div class="loading" id="loading"><span class="spinner"></span><p id="loadingText">正在加载模型…</p></div>
       <div class="load-error" id="loadError" hidden><strong>模型加载失败</strong><p id="errorText"></p><button id="retryButton">重新加载</button></div>
 
-      <section class="asset-details" aria-label="模型信息">
-        <div><span>文件</span><strong id="assetFile">—</strong></div>
-        <div><span>尺寸</span><strong id="assetSize">—</strong></div>
-        <div><span>动画</span><strong id="assetClips">—</strong></div>
+      <section class="asset-details" aria-label="资产信息">
+        <div><span id="detailLabel0">文件</span><strong id="assetFile">—</strong></div>
+        <div><span id="detailLabel1">尺寸</span><strong id="assetSize">—</strong></div>
+        <div><span id="detailLabel2">动画</span><strong id="assetClips">—</strong></div>
       </section>
 
       <div class="viewport-hint">拖动旋转 · 滚轮缩放 · 右键平移</div>
 
       <section class="control-dock" aria-label="预览控制">
-        <label class="control clip-control"><span>动画片段</span><select id="clipSelect" disabled><option>加载中</option></select></label>
-        <label class="control speed-control"><span>播放速度 <output id="speedValue">1.0×</output></span><input id="speedInput" type="range" min="0.2" max="2" step="0.1" value="1" /></label>
-        <button class="control-button" id="playButton" disabled>暂停动画</button>
+        <label class="control clip-control model-only"><span>动画片段</span><select id="clipSelect" disabled><option>加载中</option></select></label>
+        <label class="control speed-control model-only"><span>播放速度 <output id="speedValue">1.0×</output></span><input id="speedInput" type="range" min="0.2" max="2" step="0.1" value="1" /></label>
+        <button class="control-button model-only" id="playButton" disabled>暂停动画</button>
         <label class="rotate-control"><input id="rotateInput" type="checkbox" checked /><span>自动环绕</span></label>
         <button class="control-button secondary" id="resetButton">重置视角</button>
       </section>
