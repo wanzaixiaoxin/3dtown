@@ -150,3 +150,76 @@ export function buildCommerce(parent, colliders, buildBanner) {
   parent.add(cart);
   colliders.push({ minX: 2.1, maxX: 4.1, minZ: 37.2, maxZ: 39.8, top: 1.7, kind: 'prop' });
 }
+
+// ===========================================================================
+//  buildStandaloneShop — placeable single shopfront for the builder module.
+//  Mirrors buildCommerce's storefront look (sign, awning, counter, goods)
+//  but returns a self-contained Group; registers NO collider itself — the
+//  caller (builder.js) owns collider lifecycle so delete/undo stays clean.
+//  Returns { group, footprint } (footprint = AABB half sizes for colliders).
+// ===========================================================================
+export function buildStandaloneShop(signChar, rotY = 0) {
+  const m = M();
+  const type = TYPES.find(t => t.sign === signChar) || TYPES[0];
+  const g = new THREE.Group();
+  g.rotation.y = rotY;
+
+  const mat = color => new THREE.MeshStandardMaterial({ color, roughness: 0.88 });
+  const accent = mat(type.color);
+  const addMesh = (geometry, material, x, y, z) => {
+    const mesh = new THREE.Mesh(trackGeo(geometry), material);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = false;
+    mesh.receiveShadow = true;
+    g.add(mesh);
+    return mesh;
+  };
+  const addBox = (w, h, d, material, x, y, z) => addMesh(new THREE.BoxGeometry(w, h, d), material, x, y, z);
+
+  // signboard + hanging shop sign (faces -z, matching street shops)
+  addBox(2.25, 0.7, 0.12, m.woodDark, 0, 3.05, -1.82);
+  const signMat = new THREE.MeshStandardMaterial({ map: signTexture(type.name, type.color), roughness: 0.85, side: THREE.FrontSide });
+  disposables.materials.push(signMat);
+  const sign = addMesh(new THREE.PlaneGeometry(2.05, 0.58), signMat, 0, 3.05, -1.89);
+  sign.rotation.y = Math.PI;
+  sign.name = 'shopSign';
+  const signBack = sign.clone();
+  signBack.rotation.y = 0;
+  signBack.position.z += 0.01;
+  g.add(signBack);
+  const awning = addBox(5.05, 0.09, 1.25, accent, 0, 3.35, -2.25);
+  awning.rotation.x = -0.12;
+  awning.name = 'shopAwning';
+  // counter + display shelf + goods by trade
+  addBox(2.5, 0.78, 0.65, m.wood, 0, 0.45, -2.2);
+  addBox(2.65, 0.12, 0.78, m.woodDark, 0, 0.9, -2.2);
+  addBox(5.2, 2.9, 0.15, m.woodDark, 0, 1.55, -2.62);
+  addBox(5.2, 0.1, 0.5, m.wood, 0, 1.05, -2.4);
+  const goodsMat = mat(type.color);
+  if (type.sign === '酒' || type.sign === '瓷') {
+    for (const x of [-0.65, 0, 0.65]) {
+      addMesh(new THREE.CylinderGeometry(0.13, 0.19, 0.4, 8), goodsMat, x, 1.12, -2.2);
+      addMesh(new THREE.CylinderGeometry(0.07, 0.09, 0.12, 8), goodsMat, x, 1.37, -2.2);
+    }
+  } else if (type.sign === '布') {
+    for (const [i, c] of [0x9d5151, 0x557a9b, 0xb39450].entries()) {
+      const roll = addMesh(new THREE.CylinderGeometry(0.14, 0.14, 0.65, 10), mat(c), -0.65 + i * 0.65, 1.06, -2.2);
+      roll.rotation.z = Math.PI / 2;
+    }
+  } else if (type.sign === '书') {
+    for (let i = 0; i < 4; i++) addBox(0.62, 0.08, 0.4, mat(i % 2 ? 0x77503c : 0x4f6684), -0.5 + i * 0.34, 0.97 + i * 0.08, -2.2);
+  } else if (type.sign === '米') {
+    for (const x of [-0.55, 0, 0.55]) {
+      const sack = addMesh(new THREE.SphereGeometry(0.24, 8, 6), mat(0xc5ac79), x, 1.08, -2.2);
+      sack.scale.y = 1.35;
+    }
+  } else {
+    for (const x of [-0.55, 0, 0.55]) addBox(0.38, 0.25, 0.34, goodsMat, x, 1.03, -2.2);
+  }
+  addBox(0.58, 0.58, 0.58, m.wood, 1.85, 0.3, -2.15);
+  addBox(0.52, 0.52, 0.52, m.wood, 1.85, 0.85, -2.15);
+  addMesh(new THREE.CylinderGeometry(0.23, 0.18, 0.4, 8), mat(0x9b5d3f), -1.85, 0.22, -2.15);
+  addMesh(new THREE.SphereGeometry(0.36, 8, 6), mat(0x557e46), -1.85, 0.62, -2.15);
+
+  return { group: g, footprint: { hw: 2.75, hd: 1.35, top: 3.5 } };
+}

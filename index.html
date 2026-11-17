@@ -108,6 +108,62 @@
   .minimap-wrap .legend { display: flex; gap: 10px; margin-top: 7px; font-size: 10px; opacity: 0.7; }
   .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 
+  /* ---------- builder UI (我的城市) ---------- */
+  body.building .minimap-wrap { display: none; }
+  body.building #crosshair { opacity: 0 !important; }
+  #btnBuild.active { background: var(--jade); border-color: var(--jade); color: #eafff3; }
+  #builderUI {
+    position: fixed; inset: 0; z-index: 11; display: none;
+    pointer-events: none;
+  }
+  #builderUI > * { pointer-events: auto; }
+  #builderTools {
+    position: absolute; left: 18px; top: 96px;
+    display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  }
+  #builderTools .tool-btn { padding: 8px 12px; font-size: 12px; text-align: center; min-width: 64px; }
+  #builderTools .tool-btn.active { background: var(--jade); border-color: var(--jade); color: #eafff3; }
+  #builderAssetBar {
+    position: absolute; left: 18px; bottom: 18px; width: 384px; max-height: 46vh;
+    display: none; flex-direction: column; padding: 10px; gap: 8px;
+  }
+  #builderTabs { display: flex; gap: 5px; flex-wrap: wrap; }
+  #builderTabs .btn { padding: 5px 10px; font-size: 11px; }
+  #builderTabs .btn.active { background: var(--seal); border-color: var(--seal); color: #fbe9dd; }
+  #builderAssets {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+    overflow-y: auto; max-height: 34vh;
+  }
+  #builderAssets .asset-btn { padding: 9px 4px; font-size: 12px; text-align: center; }
+  #builderAssets .asset-btn.active { background: var(--gold); border-color: var(--gold); color: #3a2c14; }
+  #builderHintBar {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    padding: 8px 16px; font-size: 12px; letter-spacing: 1px;
+  }
+  #builderHint { color: #f3c98c; }
+  #builderProps {
+    position: absolute; right: 18px; top: 300px; width: 268px; max-height: 44vh;
+    overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;
+  }
+  #builderProps h4 { margin: 0; font-size: 13px; letter-spacing: 2px; color: var(--gold); }
+  #builderProps .props-empty { margin: 0; font-size: 11px; opacity: 0.5; text-align: center; line-height: 1.8; }
+  #builderProps .mat-row {
+    display: grid; grid-template-columns: 56px 30px 1fr 56px; gap: 6px; align-items: center;
+    padding-bottom: 8px; border-bottom: 1px dashed rgba(244,233,208,0.14);
+  }
+  #builderProps .mat-name { font-size: 11px; opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #builderProps input[type=color] {
+    width: 26px; height: 22px; padding: 0; border: 1px solid rgba(244,233,208,0.3);
+    border-radius: 4px; background: none; cursor: pointer;
+  }
+  #builderProps select.mat-tex {
+    width: 100%; background: rgba(244,233,208,0.08); color: var(--paper);
+    border: 1px solid rgba(244,233,208,0.25); border-radius: 5px;
+    font-family: inherit; font-size: 11px; padding: 3px 4px;
+  }
+  #builderProps select.mat-tex option { background: #2b2118; }
+  #builderProps .mat-row input[type=range] { width: 56px; }
+
   /* status */
   .status { left: 50%; bottom: 18px; transform: translateX(-50%); padding: 9px 16px; font-size: 11px; letter-spacing: 1px; text-align: center; line-height: 1.7; opacity: 0.92; }
   .status .mode { color: #f3c98c; font-weight: 600; }
@@ -171,6 +227,7 @@
         <button class="btn" data-time="night">夜</button>
       </div>
       <a class="btn" href="./preview.html">模型动态预览</a>
+      <button class="btn" id="btnBuild">建造模式</button>
       <button class="btn" id="btnSettings">⚙ 设置</button>
     </div>
 
@@ -241,6 +298,27 @@
       &nbsp;·&nbsp; <span>时辰 · <span id="statTime">正午</span></span>
       &nbsp;·&nbsp; <span>状态 · <span id="statState">驻足</span></span>
       <div class="hint">FPS <span id="statFps">–</span> · 高度 <span id="statY">0.0</span>m · 人物 <span id="statNpc">0</span></div>
+    </div>
+
+    <div id="builderUI">
+      <div class="panel" id="builderTools">
+        <button class="btn tool-btn active" data-tool="place">放置</button>
+        <button class="btn tool-btn" data-tool="select">选择</button>
+        <button class="btn tool-btn" data-tool="erase">删除</button>
+        <button class="btn tool-btn" data-tool="road">道路</button>
+        <button class="btn tool-btn" id="btnBuilderExit">退出</button>
+        <button class="btn tool-btn" id="btnBuilderClear">清空</button>
+      </div>
+      <div class="panel" id="builderAssetBar">
+        <div id="builderTabs"></div>
+        <div id="builderAssets"></div>
+      </div>
+      <div class="panel" id="builderHintBar">
+        <span id="builderHint">左键放置 · 拖拽旋转视角 · 滚轮缩放</span>
+      </div>
+      <div class="panel" id="builderProps">
+        <p class="props-empty">选中一个物件后<br>可在此调整材质</p>
+      </div>
     </div>
   </div>
 

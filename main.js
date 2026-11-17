@@ -15,6 +15,11 @@ import { updateWind, windUniforms, updateWaterfall, updateBoats, updateMist, upd
 import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
+import {
+  initBuilder, enterBuilder, exitBuilder, isBuilderEnabled,
+  setTool, selectDef, setGizmoMode, refreshPropsPanel, clearAll,
+  CATEGORIES, PLACE_DEFS, builderDebug,
+} from './builder.js';
 
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -103,12 +108,18 @@ async function init() {
 
   world = buildWorld(scene, assets);   // geometry (+ placed FBX buildings/props)
   spawnNPCs(scene, assets);            // animated villagers + animals
+  window.__townAssets = assets;        // builder reads FBX templates from here
   applyTime(currentTime);
   renderer.toneMappingExposure = getExposure();
   document.querySelectorAll('[data-time]').forEach(b => b.classList.toggle('active', b.dataset.time === currentTime));
 
   initOrbit();
   bindUI();
+  initBuilder({
+    scene, camera, renderer, orbit,
+    onChange: () => { renderer.shadowMap.needsUpdate = true; },
+  });
+  bindBuilderUI();
   post = createPost(renderer, scene, camera, settings.quality);
   post.setQuality(settings.quality);
   onResize();
@@ -264,7 +275,8 @@ function bindUI() {
   // keyboard
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
-    if (e.code === 'KeyV') toggleView();
+    if (e.code === 'KeyV' && !isBuilderEnabled()) toggleView();
+    if (e.code === 'KeyB') toggleBuilder();
     if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   });
   window.addEventListener('keyup', (e) => { keys[e.code] = false; });
@@ -289,6 +301,64 @@ function bindUI() {
 }
 
 // ===========================================================================
+//  BUILDER UI (我的城市) — asset grid, tools, props panel are static DOM;
+//  this wires events and populates the asset grid from PLACE_DEFS.
+// ===========================================================================
+let activeCategory = 'buildings';
+
+function bindBuilderUI() {
+  document.getElementById('btnBuild').addEventListener('click', () => toggleBuilder());
+
+  const tabs = document.getElementById('builderTabs');
+  const grid = document.getElementById('builderAssets');
+
+  function renderGrid() {
+    grid.innerHTML = '';
+    for (const [key, def] of Object.entries(PLACE_DEFS)) {
+      if (def.category !== activeCategory) continue;
+      const b = document.createElement('button');
+      b.className = 'btn asset-btn';
+      b.dataset.def = key;
+      b.textContent = def.label;
+      b.addEventListener('click', () => { selectDef(key); });
+      grid.appendChild(b);
+    }
+  }
+  for (const cat of CATEGORIES) {
+    const b = document.createElement('button');
+    b.className = 'btn' + (cat.key === activeCategory ? ' active' : '');
+    b.textContent = cat.label;
+    b.addEventListener('click', () => {
+      activeCategory = cat.key;
+      tabs.querySelectorAll('.btn').forEach(x => x.classList.toggle('active', x === b));
+      renderGrid();
+    });
+    tabs.appendChild(b);
+  }
+  renderGrid();
+
+  document.querySelectorAll('#builderTools .tool-btn[data-tool]').forEach(b => {
+    b.addEventListener('click', () => setTool(b.dataset.tool));
+  });
+  document.getElementById('btnBuilderExit').addEventListener('click', () => toggleBuilder());
+  document.getElementById('btnBuilderClear').addEventListener('click', () => {
+    if (confirm('清空所有已放置的物件与道路？')) clearAll();
+  });
+}
+
+function toggleBuilder() {
+  if (!isBuilderEnabled()) {
+    if (document.pointerLockElement) document.exitPointerLock();
+    enterBuilder();
+    if (view !== 'top') setView('top');           // editor is top-down
+    orbit.enabled = true;                          // setView('fp') would disable it
+    refreshPropsPanel();
+  } else {
+    exitBuilder();
+  }
+}
+
+// ===========================================================================
 //  VIEW SWITCH
 // ===========================================================================
 function toggleView() { setView(view === 'top' ? 'fp' : 'top'); }
@@ -302,7 +372,7 @@ function setView(v) {
   if (v === 'top') {
     orbit.enabled = true;
     if (document.pointerLockElement) document.exitPointerLock();
-    frameTopDown();
+    if (!isBuilderEnabled()) frameTopDown();
   } else {
     orbit.enabled = false;
     player.climbing = false;
@@ -391,6 +461,7 @@ function groundHeightAt(x, z, curY) {
 //  PLAYER PHYSICS
 // ===========================================================================
 function updatePlayer(dt) {
+  if (isBuilderEnabled()) return;   // frozen during build mode
   const forward = _v1.set(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   const right = _v2.set(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
   const wish = new THREE.Vector3();
@@ -618,7 +689,7 @@ window.__disposeTown = function () {
 };
 
 // debug hook for automated verification
-window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); Object.defineProperty(window,'__post',{get:()=>post}); window.__wind = windUniforms; window.__gait = applyGait; window.__setPost = (v)=>{ post = v; }; window.__town = { player, ladders, colliders, npcs, setView, applyTime, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
+window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); Object.defineProperty(window,'__post',{get:()=>post}); window.__wind = windUniforms; window.__gait = applyGait; window.__setPost = (v)=>{ post = v; }; window.__town = { player, ladders, colliders, npcs, setView, applyTime, toggleBuilder, isBuilderEnabled, builderDebug, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
 
 // ===========================================================================
 init().catch((e) => {

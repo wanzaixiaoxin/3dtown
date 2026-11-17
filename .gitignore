@@ -15,3 +15,6 @@ fbxtest.html
 tmat.html
 
 .workbuddy/
+
+# zcode local workspace
+.zcode/

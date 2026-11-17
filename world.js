@@ -22,6 +22,11 @@ export const lamps = [];                 // {x,z,y} light sources that glow at n
 export const litWindows = [];            // emissive materials already shared; count only
 export const walkableLanes = [];         // for minimap roads
 
+// --- builder plot (我的城市) — reserved empty ground for the build module ---
+// Chosen to clear the east shop row (x≈10), hero houses, pavilion house (17,0)
+// and the barn (39,16): pad spans x 13.5–35.5, z 6–26.
+export const PLOT = { x: 24.5, z: 16, halfW: 11, halfD: 10 };
+
 export let world;
 
 // ---- day-night environment object ----
@@ -151,7 +156,7 @@ function buildRoads(parent) {
 //  HOUSE — realistic: stone base, plaster wall, timber frame, tiled hip roof
 //  All parts rest on ground (y=0). Registers a collider.
 // ---------------------------------------------------------------------------
-function buildHouse(parent, x, z, w, d, h, opts = {}) {
+export function buildHouse(parent, x, z, w, d, h, opts = {}) {
   const m = M();
   const g = new THREE.Group();
   g.position.set(x, 0, z);
@@ -276,9 +281,11 @@ function buildHouse(parent, x, z, w, d, h, opts = {}) {
   parent.add(g);
 
   // collider (body only, footprint rotated roughly — use unrotated AABB approx)
-  const hw = Math.abs(w/2*Math.cos(g.rotation.y)) + Math.abs(d/2*Math.sin(g.rotation.y));
-  const hd = Math.abs(w/2*Math.sin(g.rotation.y)) + Math.abs(d/2*Math.cos(g.rotation.y));
-  colliders.push({ minX: x-hw, maxX: x+hw, minZ: z-hd, maxZ: z+hd, top: baseH + bodyH, kind: 'house' });
+  if (!opts.noCollider) {
+    const hw = Math.abs(w/2*Math.cos(g.rotation.y)) + Math.abs(d/2*Math.sin(g.rotation.y));
+    const hd = Math.abs(w/2*Math.sin(g.rotation.y)) + Math.abs(d/2*Math.cos(g.rotation.y));
+    colliders.push({ minX: x-hw, maxX: x+hw, minZ: z-hd, maxZ: z+hd, top: baseH + bodyH, kind: 'house' });
+  }
   return g;
 }
 
@@ -627,6 +634,46 @@ export function getNightAmount() { return _curPreset ? _curPreset.nightAmount : 
 // ---------------------------------------------------------------------------
 //  BUILD EVERYTHING
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+//  BUILDER PLOT PAD — flattened earthen base + stone kerb for 我的城市 module.
+//  Procedural scatter (houses/trees/lamps/bushes/grass) must stay clear of it.
+// ---------------------------------------------------------------------------
+export function plotRect() {
+  return {
+    minX: PLOT.x - PLOT.halfW, maxX: PLOT.x + PLOT.halfW,
+    minZ: PLOT.z - PLOT.halfD, maxZ: PLOT.z + PLOT.halfD,
+  };
+}
+
+export function inPlot(x, z, pad = 2) {
+  const r = plotRect();
+  return x > r.minX - pad && x < r.maxX + pad && z > r.minZ - pad && z < r.maxZ + pad;
+}
+
+function buildPlotPad(parent) {
+  const m = M();
+  const w = PLOT.halfW * 2, d = PLOT.halfD * 2;
+  const pad = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w, 0.1, d)), m.dirt);
+  pad.position.set(PLOT.x, 0.05, PLOT.z);
+  pad.receiveShadow = true;
+  pad.name = 'builderPlotPad';
+  parent.add(pad);
+  // low stone kerb ringing the plot (decorative, no collider so you can walk in)
+  const kerbMat = m.stoneLt;
+  for (const [sx, sz, kw, kd] of [
+    [0, -PLOT.halfD - 0.25, w + 0.5, 0.5],
+    [0, PLOT.halfD + 0.25, w + 0.5, 0.5],
+    [-PLOT.halfW - 0.25, 0, 0.5, d + 1.5],
+    [PLOT.halfW + 0.25, 0, 0.5, d + 1.5],
+  ]) {
+    const kerb = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(kw, 0.22, kd)), kerbMat);
+    kerb.position.set(PLOT.x + sx, 0.11, PLOT.z + sz);
+    kerb.castShadow = kerb.receiveShadow = true;
+    kerb.name = 'builderPlotKerb';
+    parent.add(kerb);
+  }
+}
+
 export function buildWorld(scene, assets = null) {
   world = new THREE.Group();
   world.name = 'world';
@@ -635,6 +682,7 @@ export function buildWorld(scene, assets = null) {
   buildGround(world);
   buildRoads(world);
   buildAnimatedPond(world, -26, 26, 8);
+  buildPlotPad(world);
   // NOTE: the plaza well is replaced by a downloaded FBX well in placeAssets().
 
   const m = M();
@@ -676,7 +724,8 @@ export function buildWorld(scene, assets = null) {
     { x: -30, z: 30, r: 4 },    // rockery B
     { x: 30, z: -34, r: 10 },   // walled garden
   ];
-  const inReserved = (x, z) => RESERVED.some(r => Math.hypot(x - r.x, z - r.z) < r.r);
+  const inReserved = (x, z) =>
+    RESERVED.some(r => Math.hypot(x - r.x, z - r.z) < r.r) || inPlot(x, z, 3);
 
   // filter out overlaps with reserved zones and with already-placed houses
   const placed = [];
@@ -737,6 +786,7 @@ export function buildWorld(scene, assets = null) {
     if (Math.abs(Math.abs(x) - 10) < 4 && Math.abs(z) > 12) return; // shop rows
     if (Math.hypot(x + 13, z - 20) < 8) return;   // pavilion
     if (Math.hypot(x - 30, z + 34) < 10) return;  // garden
+    if (inPlot(x, z, 3)) return;                  // builder plot
     buildTree(world, x, z, 0.85 + (i % 4) * 0.12);
   });
 
@@ -747,7 +797,7 @@ export function buildWorld(scene, assets = null) {
     [12, 6], [-12, 6], [12, -6], [-12, -6],
     [24, 6], [-24, 6], [24, -6], [-24, -6],
   ];
-  lampPositions.forEach(([x,z]) => buildLamp(world, x, z));
+  lampPositions.forEach(([x,z]) => { if (!inPlot(x, z, 2)) buildLamp(world, x, z); });
 
   // --- pooled night point lights (a handful, positioned at key lamps) ---
   const lightSpots = [[0,-1.5],[12,6],[-12,6],[12,-6],[-12,-6],[0,20],[0,-20],[0,34],[17,0]];
@@ -795,6 +845,7 @@ export function buildWorld(scene, assets = null) {
   const bushSpots = [[-12, 26],[10, 34],[-38, 8],[36, 8],[26, 20],[-24, -30],[30, -18],[-8, -34]];
   bushSpots.forEach(([bx, bz], i) => {
     if (Math.abs(bx) < 7 || Math.abs(bz) < 7) return;
+    if (inPlot(bx, bz, 2)) return; // builder plot
     buildBush(world, bx, bz, 0.65 + (i % 3) * 0.18);
   });
 

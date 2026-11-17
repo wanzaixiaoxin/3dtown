@@ -35,6 +35,50 @@ export async function loadPBRTextures(renderer, base = './assets/textures/') {
   return out;
 }
 
+// ---------------------------------------------------------------------------
+//  On-demand single-set loader for the builder material editor.
+//  PBR_CATALOG lists every CC0 set the UI offers; base path differs per origin.
+// ---------------------------------------------------------------------------
+export const PBR_CATALOG = {
+  // ambientCG sets (main assets dir — preloaded at boot by loadPBRTextures)
+  stone_paving: { label: '石板路', base: './assets/textures/' },
+  roof_tile:    { label: '屋顶瓦', base: './assets/textures/' },
+  plaster:      { label: '灰泥墙', base: './assets/textures/' },
+  wood_plank:   { label: '木板', base: './assets/textures/' },
+  granite:      { label: '花岗岩', base: './assets/textures/' },
+  brick:        { label: '青砖', base: './assets/textures/' },
+  // Poly Haven sets (free_resources — lazy-loaded on demand)
+  cobblestone_02:           { label: '鹅卵石', base: './assets/free_resources/polyhaven/textures/' },
+  brick_pavement_03:        { label: '砖铺地', base: './assets/free_resources/polyhaven/textures/' },
+  clean_pebbles:            { label: '碎石滩', base: './assets/free_resources/polyhaven/textures/' },
+  grey_roof_tiles:          { label: '灰瓦', base: './assets/free_resources/polyhaven/textures/' },
+  clay_roof_tiles_02:       { label: '陶瓦', base: './assets/free_resources/polyhaven/textures/' },
+  beige_wall_001:           { label: '米墙', base: './assets/free_resources/polyhaven/textures/' },
+  japanese_cedar_planks:    { label: '杉木板', base: './assets/free_resources/polyhaven/textures/' },
+  chinese_cedar_bark:       { label: '杉树皮', base: './assets/free_resources/polyhaven/textures/' },
+  brick_moss_001:           { label: '苔砖', base: './assets/free_resources/polyhaven/textures/' },
+  granite_tile_02:          { label: '石砖', base: './assets/free_resources/polyhaven/textures/' },
+};
+
+const _singleCache = new Map();   // key -> Promise<{ color, normal, rough } | null>
+
+export function loadSinglePBRSet(renderer, key) {
+  if (_singleCache.has(key)) return _singleCache.get(key);
+  const entry = PBR_CATALOG[key];
+  if (!entry) return Promise.resolve(null);
+  const aniso = Math.min(8, renderer?.capabilities?.getMaxAnisotropy?.() || 4);
+  const p = (async () => {
+    const [color, normal, rough] = await Promise.all([
+      loadTex(`${entry.base}${key}_color.jpg`, THREE.SRGBColorSpace, aniso),
+      loadTex(`${entry.base}${key}_normal.jpg`, THREE.NoColorSpace, aniso),
+      loadTex(`${entry.base}${key}_roughness.jpg`, THREE.NoColorSpace, aniso),
+    ]);
+    return color ? { color, normal, rough } : null;
+  })();
+  _singleCache.set(key, p);
+  return p;
+}
+
 export const HDRI_FILES = {
   morning: 'spruit_sunrise.hdr',
   noon: 'kloppenheim_06_puresky.hdr',

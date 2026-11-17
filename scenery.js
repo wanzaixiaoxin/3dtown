@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { M, trackGeo } from './materials.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { colliders } from './world.js';
+import { colliders, inPlot } from './world.js';
 
 // --- shared wind uniforms (driven by main.js each frame) ---
 export const windUniforms = {
@@ -347,6 +347,7 @@ export function buildGrassField(parent) {
     if (Math.abs(x) < 5.2 || Math.abs(z) < 5.2) continue;
     if (Math.hypot(x, z) < 11.5) continue;
     if (Math.hypot(x + 26, z - 26) < 8) continue;
+    if (inPlot(x, z, 1)) continue;
     d.position.set(x, 0.02, z);
     d.rotation.set(0, Math.random() * Math.PI * 2, 0);
     const sc = 0.65 + Math.random() * 0.75;
