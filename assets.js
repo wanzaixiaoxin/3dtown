@@ -231,6 +231,53 @@ const FALLBACK_CLOTH = [0x496a86, 0x8e4b3f, 0x547147, 0x80623c, 0x765b8b, 0xa27c
 
 const pick = (list, i) => list[((i % list.length) + list.length) % list.length];
 
+// 套装抽牌盒：把「上衣 × 裤子」的全部组合一次性洗牌，逐张发放，抽完再重洗。
+// 相比逐部位独立随机，能保证一轮之内绝不撞衫；组合数 = 上衣数 × 裤子数。
+let outfitBag = [];
+function drawOutfitPair() {
+  const pools = CHAR_CFG.randomPools || {};
+  const shirts = Array.isArray(pools.shirt) && pools.shirt.length ? pools.shirt : FALLBACK_CLOTH;
+  const pants = Array.isArray(pools.pants) && pools.pants.length ? pools.pants : FALLBACK_CLOTH;
+  if (!outfitBag.length) {
+    for (const s of shirts) for (const p of pants) outfitBag.push([s, p]);
+    for (let i = outfitBag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = outfitBag[i]; outfitBag[i] = outfitBag[j]; outfitBag[j] = tmp;
+    }
+  }
+  return outfitBag.pop();
+}
+
+/**
+ * 生成一套随机人物配色（部位 -> THREE.Color）。
+ * 肤色/发色/眼睛等独立随机；上衣与裤子来自不重复的套装抽牌盒，
+ * 因此在 characters.uniqueOutfits 开启时，一轮内不会出现相同穿着。
+ * 缺失的部位回退到预设色板。
+ */
+export function randomCharacterColors() {
+  const pools = CHAR_CFG.randomPools || {};
+  const preset = CHARACTER_PARTS.length && CHAR_CFG.palettes?.length
+    ? CHAR_CFG.palettes[Math.floor(Math.random() * CHAR_CFG.palettes.length)]
+    : null;
+  const out = {};
+  for (const part of CHARACTER_PARTS) {
+    if (part.key === 'other') continue;
+    const pool = pools[part.key];
+    if (Array.isArray(pool) && pool.length) {
+      out[part.key] = new THREE.Color(color(pool[Math.floor(Math.random() * pool.length)]));
+    } else if (preset) {
+      const raw = preset.colors?.[part.key] ?? preset[part.key];
+      if (raw !== undefined) out[part.key] = new THREE.Color(color(raw));
+    }
+  }
+  if (CHAR_CFG.uniqueOutfits !== false) {
+    const [shirt, pants] = drawOutfitPair();
+    out.shirt = new THREE.Color(color(shirt));
+    out.pants = new THREE.Color(color(pants));
+  }
+  return out;
+}
+
 /** 取第 variant 套人物配色（部位 -> THREE.Color）。配置优先，缺失则回退旧色板。 */
 export function characterPalette(variant = 0) {
   const palettes = CHAR_CFG.palettes;
@@ -260,9 +307,12 @@ export function applyCharacterColors(root, colors) {
     if (!mesh.isSkinnedMesh) return;
     mesh.frustumCulled = false;
     if (!mesh.geometry.getAttribute('partId')) return;
-    if (!mesh.geometry.userData.colorized) {
+    // 标记必须挂在 mesh 上，不能挂在 geometry 上：SkeletonUtils.clone 的实例
+    // 共享 geometry，若按 geometry 判断，先前的实例会把模板/其他实例误判为已上色，
+    // 导致大量人物共用同一套顶点色（撞衫的真正原因）。
+    if (!mesh.userData.colorized) {
       mesh.geometry = mesh.geometry.clone();
-      mesh.geometry.userData.colorized = true;
+      mesh.userData.colorized = true;
     }
     const geometry = mesh.geometry;
     const partAttr = geometry.getAttribute('partId');

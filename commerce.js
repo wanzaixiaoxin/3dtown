@@ -17,6 +17,9 @@ for (const side of [-1, 1]) {
       rotY: side < 0 ? angle('-PI/2') : angle('PI/2'),
       keeper: { x: side * CC.keeper.xOffset, z: z + CC.keeper.zOffset },
       customer: { x: side * CC.customer.xOffset, z: z + CC.customer.zOffset },
+      // 门洞与屋内落点：供 NPC 走进建筑使用
+      door: { x: side * (CC.xOffset - CC.doorInset), z },
+      inside: { x: side * (CC.xOffset - CC.insideInset), z },
     });
   });
 }
@@ -59,27 +62,27 @@ export function buildCommerce(parent, colliders, buildBanner) {
   };
   const addBox = (group, w, h, d, material, x, y, z) => addMesh(group, new THREE.BoxGeometry(w, h, d), material, x, y, z);
 
-  function addGoods(group, sign, color) {
+  function addGoods(group, sign, color, z = -2.2) {
     const goodsMat = mat(color);
     if (sign === '酒' || sign === '瓷') {
       for (const x of [-0.65, 0, 0.65]) {
-        addMesh(group, new THREE.CylinderGeometry(0.13, 0.19, 0.4, 8), goodsMat, x, 1.12, -2.2);
-        addMesh(group, new THREE.CylinderGeometry(0.07, 0.09, 0.12, 8), goodsMat, x, 1.37, -2.2);
+        addMesh(group, new THREE.CylinderGeometry(0.13, 0.19, 0.4, 8), goodsMat, x, 1.12, z);
+        addMesh(group, new THREE.CylinderGeometry(0.07, 0.09, 0.12, 8), goodsMat, x, 1.37, z);
       }
     } else if (sign === '布') {
       for (const [i, c] of [0x9d5151, 0x557a9b, 0xb39450].entries()) {
-        const roll = addMesh(group, new THREE.CylinderGeometry(0.14, 0.14, 0.65, 10), mat(c), -0.65 + i * 0.65, 1.06, -2.2);
+        const roll = addMesh(group, new THREE.CylinderGeometry(0.14, 0.14, 0.65, 10), mat(c), -0.65 + i * 0.65, 1.06, z);
         roll.rotation.z = Math.PI / 2;
       }
     } else if (sign === '书') {
-      for (let i = 0; i < 4; i++) addBox(group, 0.62, 0.08, 0.4, mat(i % 2 ? 0x77503c : 0x4f6684), -0.5 + i * 0.34, 0.97 + i * 0.08, -2.2);
+      for (let i = 0; i < 4; i++) addBox(group, 0.62, 0.08, 0.4, mat(i % 2 ? 0x77503c : 0x4f6684), -0.5 + i * 0.34, 0.97 + i * 0.08, z);
     } else if (sign === '米') {
       for (const x of [-0.55, 0, 0.55]) {
-        const sack = addMesh(group, new THREE.SphereGeometry(0.24, 8, 6), mat(0xc5ac79), x, 1.08, -2.2);
+        const sack = addMesh(group, new THREE.SphereGeometry(0.24, 8, 6), mat(0xc5ac79), x, 1.08, z);
         sack.scale.y = 1.35;
       }
     } else {
-      for (const x of [-0.55, 0, 0.55]) addBox(group, 0.38, 0.25, 0.34, goodsMat, x, 1.03, -2.2);
+      for (const x of [-0.55, 0, 0.55]) addBox(group, 0.38, 0.25, 0.34, goodsMat, x, 1.03, z);
     }
   }
 
@@ -99,6 +102,12 @@ export function buildCommerce(parent, colliders, buildBanner) {
     g.add(signBack);
     const awning = addBox(g, 5.05, 0.09, 1.25, accent, 0, 3.35, -2.25);
     awning.rotation.x = -0.12;
+    // 布棚前沿的波浪垂边 + 挑杆，避免看起来像一块硬板
+    for (let i = 0; i < 7; i++) {
+      const flap = addBox(g, 0.7, 0.3 + (i % 2) * 0.09, 0.05, accent, -2.1 + i * 0.7, 3.13, -2.84);
+      flap.rotation.x = -0.12;
+    }
+    addBox(g, 5.1, 0.07, 0.07, m.woodDark, 0, 3.24, -2.86);
     addBox(g, 2.5, 0.78, 0.65, m.wood, 0, 0.45, -2.2);
     addBox(g, 2.65, 0.12, 0.78, m.woodDark, 0, 0.9, -2.2);
     addGoods(g, shop.sign, shop.color);
@@ -122,13 +131,31 @@ export function buildCommerce(parent, colliders, buildBanner) {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     const accent = mat(color);
-    for (const px of [-0.95, 0.95]) for (const pz of [-0.55, 0.55]) addBox(g, 0.07, 2.1, 0.07, m.woodDark, px, 1.05, pz);
-    addBox(g, 2.25, 0.1, 1.5, accent, 0, 2.15, 0);
-    addBox(g, 1.95, 0.72, 0.85, m.wood, 0, 0.38, 0);
-    addBox(g, 2.05, 0.1, 0.95, m.woodDark, 0, 0.78, 0);
-    for (const px of [-0.55, 0, 0.55]) addMesh(g, new THREE.CylinderGeometry(0.14, 0.19, 0.34, 8), accent, px, 1.0, 0);
+    // 木架 + 斜撑
+    for (const px of [-0.95, 0.95]) {
+      for (const pz of [-0.55, 0.55]) addBox(g, 0.09, 2.1, 0.09, m.woodDark, px, 1.05, pz);
+      const brace = addBox(g, 0.07, 0.07, 1.05, m.woodDark, px, 1.93, 0);
+      brace.rotation.x = px < 0 ? 0.48 : -0.48;
+    }
+    // 斜布棚 + 波浪垂边 + 挑杆
+    const canopy = addBox(g, 2.4, 0.08, 1.6, accent, 0, 2.18, 0);
+    canopy.rotation.x = -0.14;
+    for (let i = 0; i < 5; i++) {
+      const flap = addBox(g, 0.46, 0.28 + (i % 2) * 0.09, 0.05, accent, -0.92 + i * 0.46, 2.0, -0.82);
+      flap.rotation.x = -0.14;
+    }
+    addBox(g, 2.42, 0.06, 0.06, m.woodDark, 0, 2.07, -0.85);
+    // 柜台 + 前挡板 + 按行业摆货
+    addBox(g, 2.0, 0.72, 0.85, m.wood, 0, 0.38, 0);
+    addBox(g, 2.05, 0.1, 0.92, m.woodDark, 0, 0.78, 0);
+    addBox(g, 2.0, 0.42, 0.05, m.woodDark, 0, 0.51, -0.46);
+    addGoods(g, sign, color, 0);
+    // 挂幌
+    const signMat = new THREE.MeshStandardMaterial({ map: signTexture(sign, color), roughness: 0.9, side: THREE.DoubleSide });
+    disposables.materials.push(signMat);
+    addMesh(g, new THREE.PlaneGeometry(1.3, 0.4), signMat, 0, 1.72, -0.9);
     parent.add(g);
-    colliders.push({ minX: x - 1.15, maxX: x + 1.15, minZ: z - 0.8, maxZ: z + 0.8, top: 2.2, kind: 'prop' });
+    colliders.push({ minX: x - 1.15, maxX: x + 1.15, minZ: z - 0.85, maxZ: z + 0.85, top: 2.2, kind: 'prop' });
   }
 
   const cart = new THREE.Group();

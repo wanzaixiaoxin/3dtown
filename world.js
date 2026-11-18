@@ -21,6 +21,28 @@ const BUILD_CFG = CONFIG.buildings;
 const SCENERY_CFG = CONFIG.scenery;
 const ENV_CFG = CONFIG.environment;
 
+// ---- 窗灯错落：少量共享材质变体，避免每扇窗一个材质（控制 draw call）----
+const WINDOW_VARIANTS = [];
+function initWindowVariants() {
+  if (WINDOW_VARIANTS.length) return WINDOW_VARIANTS;
+  const base = M().windowLit;
+  const defs = ENV_CFG.emissive?.windowLit?.variants || [{ threshold: 0, brightness: 1 }];
+  for (const def of defs) {
+    const mat = base.clone();
+    mat.name = `windowLit-${WINDOW_VARIANTS.length}`;
+    mat.userData.threshold = def.threshold ?? 0;
+    mat.userData.brightness = def.brightness ?? 1;
+    WINDOW_VARIANTS.push(mat);
+    disposables.materials.push(mat);
+  }
+  return WINDOW_VARIANTS;
+}
+function windowVariant(x, z, floor, wx) {
+  const list = initWindowVariants();
+  const seed = Math.abs(Math.round((x * 31.7 + z * 17.3 + floor * 7.1 + wx * 53.3) * 10));
+  return list[seed % list.length];
+}
+
 export const TOWN = { half: TOWN_CFG.half };        // playable half-size (from config)
 export const colliders = [];             // {minX,maxX,minZ,maxZ,top,climbable?}
 export const ladders = [];
@@ -56,12 +78,22 @@ function buildGround(parent) {
   const seg = 64;
   const geo = trackGeo(new THREE.PlaneGeometry(size, size, seg, seg));
   // give gentle rolling height on the outer rim so town sits in a valley
+  // 城外四条引道走廊压平，避免抬升的地形吞掉出生/消失点所在的路
+  const AR = TOWN_CFG.approachRoads || {};
+  const corridorHalf = (AR.width || 7) / 2 + 1.5;
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i);
     const r = Math.sqrt(x * x + y * y) / (TOWN.half + 10);
     const rim = Math.max(0, r - 0.75); // 0 in the middle, rises toward edges
-    const h = rim * rim * 26 * (0.6 + 0.4 * Math.sin(x * 0.15) * Math.cos(y * 0.12));
+    let h = rim * rim * 26 * (0.6 + 0.4 * Math.sin(x * 0.15) * Math.cos(y * 0.12));
+    // PlaneGeometry local +Y maps to world -Z after rotation; either axis near
+    // centre is a road corridor, so flatten there with a soft shoulder.
+    const axisDist = Math.min(Math.abs(x), Math.abs(y));
+    if (axisDist < corridorHalf + 3) {
+      const t = Math.min(1, Math.max(0, (axisDist - corridorHalf) / 3));
+      h *= t * t * (3 - 2 * t); // smoothstep: 0 on road, full height past shoulder
+    }
     pos.setZ(i, h);
   }
   geo.computeVertexNormals();
@@ -159,6 +191,53 @@ function buildRoads(parent) {
   }
   inst.instanceMatrix.needsUpdate = true;
   parent.add(inst);
+  buildApproachRoads(parent);
+}
+
+/**
+ * 四条城外引道：从城墙缺口向外延伸，末端即人流出生/消失点。
+ * 数据与 TOWN_CFG.approachRoads + NPC_CFG.gates 共用同一套坐标，npc.js 据此算 spawn。
+ */
+function buildApproachRoads(parent) {
+  const AR = TOWN_CFG.approachRoads;
+  if (!AR || AR.length <= 0) return;
+  const m = M();
+  const H = TOWN.half;
+  const len = AR.length;
+  const w = AR.width;
+  const start = H - 2;                 // 稍微伸进城门内，和主路接上
+  const gates = CONFIG.npcs.gates;
+  gates.forEach((gate, idx) => {
+    const alongX = gate.nx !== 0;      // 东/西门：路沿 X 轴
+    const geo = trackGeo(new THREE.PlaneGeometry(w, len + 2));
+    const road = new THREE.Mesh(geo, m.roadStone);
+    road.rotation.x = -Math.PI / 2;
+    road.rotation.z = alongX ? Math.PI / 2 : 0;
+    road.position.set(
+      alongX ? gate.nx * (start + len / 2) : gate.x,
+      0.045,
+      alongX ? gate.z : gate.nz * (start + len / 2),
+    );
+    road.receiveShadow = true;
+    road.name = `approach-road-${idx}`;
+    parent.add(road);
+
+    if (!AR.markers) return;
+    // 出生/消失点路标：矮石台 + 暖色灯柱，位于引道末端
+    const dist = start + len * (AR.spawnRatio ?? 0.78);
+    const mx = alongX ? gate.nx * dist : gate.x;
+    const mz = alongX ? gate.z : gate.nz * dist;
+    const marker = new THREE.Group();
+    const pad = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.85, 1.0, 0.22, 8)), m.stoneDk);
+    pad.position.y = 0.11; pad.receiveShadow = true; marker.add(pad);
+    const post = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(0.12, 0.16, 2.1, 6)), m.woodDark);
+    post.position.y = 1.15; post.castShadow = true; marker.add(post);
+    const glow = new THREE.Mesh(trackGeo(new THREE.SphereGeometry(0.22, 8, 6)), m.lampGlow);
+    glow.position.y = 2.28; marker.add(glow);
+    marker.position.set(mx, 0, mz);
+    marker.name = `approach-marker-${idx}`;
+    parent.add(marker);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -181,11 +260,28 @@ export function buildHouse(parent, x, z, w, d, h, opts = {}) {
   base.position.y = baseH / 2; base.castShadow = base.receiveShadow = true;
   g.add(base);
 
-  // body
+  // body — 门开着时拆成左右墙段 + 门楣，留出真正可穿行的门洞
   const bodyH = h - baseH;
-  const body = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w, bodyH, d)), wallMat);
-  body.position.y = baseH + bodyH / 2; body.castShadow = body.receiveShadow = true;
-  g.add(body);
+  const doorH = Math.min(2.4, bodyH * 0.52), doorW = w * 0.26;
+  const doorOpen = opts.doorOpen !== false && doorH < bodyH - 0.3;
+  if (doorOpen) {
+    const sideW = (w - doorW) / 2;
+    for (const sx of [-1, 1]) {
+      const seg = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(sideW, bodyH, d)), wallMat);
+      seg.position.set(sx * (doorW + sideW) / 2, baseH + bodyH / 2, 0);
+      seg.castShadow = seg.receiveShadow = true;
+      g.add(seg);
+    }
+    const lintelH = bodyH - doorH;
+    const lintel = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW, lintelH, d)), wallMat);
+    lintel.position.set(0, baseH + doorH + lintelH / 2, 0);
+    lintel.castShadow = lintel.receiveShadow = true;
+    g.add(lintel);
+  } else {
+    const body = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w, bodyH, d)), wallMat);
+    body.position.y = baseH + bodyH / 2; body.castShadow = body.receiveShadow = true;
+    g.add(body);
+  }
 
   // corner timber posts
   const postGeo = trackGeo(new THREE.BoxGeometry(0.18, bodyH, 0.18));
@@ -254,21 +350,44 @@ export function buildHouse(parent, x, z, w, d, h, opts = {}) {
     g.add(floorBeam);
   }
 
-  // door (recessed, with frame)
-  const doorH = Math.min(2.4, bodyH * 0.52), doorW = w * 0.26;
-  const door = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW, doorH, 0.1)), m.wood);
-  door.position.set(0, baseH + doorH / 2, -d / 2 - 0.02); g.add(door);
-  const doorFrame = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW + 0.2, doorH + 0.16, 0.06)), m.woodDark);
-  doorFrame.position.set(0, baseH + doorH / 2 + 0.02, -d / 2 + 0.02); g.add(doorFrame);
+  // door — 两扇外开的门板 + 门洞内的暗色室内，NPC 可穿行进入
+  if (doorOpen) {
+    const room = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW * 1.5, doorH * 1.05, 0.12)), m.woodDark);
+    room.position.set(0, baseH + doorH / 2, Math.min(0.75, d * 0.28));
+    g.add(room);
+    const leafW = doorW / 2;
+    const openAngle = opts.doorAngle ?? 1.1;
+    for (const sx of [-1, 1]) {
+      const hinge = new THREE.Group();
+      hinge.position.set(sx * doorW / 2, 0, -d / 2 - 0.06);
+      hinge.rotation.y = -sx * openAngle;
+      const leaf = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(leafW * 0.94, doorH * 0.96, 0.08)), m.wood);
+      leaf.position.set(-sx * leafW * 0.47, baseH + doorH / 2, 0);
+      leaf.castShadow = true;
+      hinge.add(leaf);
+      g.add(hinge);
+      const jamb = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(0.12, doorH + 0.16, 0.16)), m.woodDark);
+      jamb.position.set(sx * (doorW / 2 + 0.06), baseH + doorH / 2, -d / 2 - 0.02);
+      g.add(jamb);
+    }
+    const header = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW + 0.32, 0.16, 0.16)), m.woodDark);
+    header.position.set(0, baseH + doorH + 0.06, -d / 2 - 0.02);
+    g.add(header);
+  } else {
+    const door = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW, doorH, 0.1)), m.wood);
+    door.position.set(0, baseH + doorH / 2, -d / 2 - 0.02); g.add(door);
+    const doorFrame = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(doorW + 0.2, doorH + 0.16, 0.06)), m.woodDark);
+    doorFrame.position.set(0, baseH + doorH / 2 + 0.02, -d / 2 + 0.02); g.add(doorFrame);
+  }
 
-  // windows (glowing at night) — lattice look via a lit material
-  const winMat = opts.winMat || m.windowLit;
+  // windows (glowing at night) — 按位置选变体，黄昏渐次亮起而非整片同步
+  const winMat = opts.winMat;
   const winH = Math.min(1.35, storyH * 0.42);
   const winGeo = trackGeo(new THREE.BoxGeometry(w * 0.16, winH, 0.08));
   for (let floor = 0; floor < stories; floor++) {
     const wy = baseH + storyH * (floor + 0.58);
     for (const wx of [-w * 0.28, w * 0.28]) {
-      const win = new THREE.Mesh(winGeo, winMat);
+      const win = new THREE.Mesh(winGeo, winMat || windowVariant(x, z, floor, wx));
       win.position.set(wx, wy, -d/2 - 0.02);
       g.add(win);
       const frame = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(w*0.16+0.14, winH+0.14, 0.05)), m.woodDark);
@@ -602,9 +721,18 @@ export function applyTime(key, instant = true) {
 
   env.rim.intensity = L.rim.intensity * (1 - p.nightAmount * L.rim.nightFade);
 
-  // emissive materials respond to nightAmount
+  // emissive materials respond to nightAmount — 窗灯按变体错落点亮
   const na = p.nightAmount;
   const EM = E.emissive;
+  const smooth = (a, b, v) => {
+    const t = Math.min(1, Math.max(0, (v - a) / (b - a || 1)));
+    return t * t * (3 - 2 * t);
+  };
+  for (const mat of WINDOW_VARIANTS) {
+    const lit = smooth(mat.userData.threshold, mat.userData.threshold + 0.32, na);
+    mat.emissiveIntensity = (EM.windowLit.base + lit * EM.windowLit.scale) * mat.userData.brightness;
+    mat.color.setHex(color(lit > 0.5 ? EM.windowLit.nightColor : EM.windowLit.dayColor));
+  }
   m.windowLit.emissiveIntensity = EM.windowLit.base + na * EM.windowLit.scale;
   m.windowLit.color.setHex(color(na > 0.5 ? EM.windowLit.nightColor : EM.windowLit.dayColor));
   m.lantern.emissiveIntensity = EM.lantern.base + na * EM.lantern.scale;
