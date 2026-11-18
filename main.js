@@ -39,6 +39,7 @@ const settings = {
   fog: false,
   quality: 'medium',
   weather: 'clear',
+  comfort: false,
 };
 const SETTINGS_KEY = 'guzhen-settings-v3';
 function loadSettings() {
@@ -47,6 +48,34 @@ function loadSettings() {
 }
 function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+}
+
+// ---------------------------------------------------------------------------
+//  COMFORT MODE (防眩晕) — sharper picture, zero camera lag, no grain/vignette.
+//  Applied on toggle and at boot; manual FOV slider changes still win after.
+// ---------------------------------------------------------------------------
+function applyComfort(on) {
+  settings.comfort = on;
+  // 1) sharper picture: allow up to 1.5x device pixel ratio instead of hard 1x
+  renderer.setPixelRatio(on ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 1));
+  onResize();
+  // 2) no film grain / vignette (biggest flicker offenders)
+  if (post?.grade) {
+    post.grade.uniforms.uGrain.value = on ? 0 : 0.012;
+    post.grade.uniforms.uVignette.value = on ? 0 : 0.22;
+  }
+  // 3) wider default FOV reduces tunnel vision — only when the user hasn't
+  //    manually picked another value this session (boot applies before bindUI)
+  if (on && !settings.fovTouched) {
+    settings.fov = Math.max(settings.fov, 75);
+    camera.fov = settings.fov;
+    camera.updateProjectionMatrix();
+    const fovEl = document.getElementById('fov');
+    const fovVal = document.getElementById('fovVal');
+    if (fovEl) fovEl.value = settings.fov;
+    if (fovVal) fovVal.textContent = settings.fov;
+  }
+  saveSettings();
 }
 
 let renderer, scene, camera, clock, orbit, world, post;
@@ -122,6 +151,7 @@ async function init() {
   bindBuilderUI();
   post = createPost(renderer, scene, camera, settings.quality);
   post.setQuality(settings.quality);
+  if (settings.comfort) applyComfort(true);   // boot-time comfort restore (after post exists)
   onResize();
   window.addEventListener('resize', onResize);
 
@@ -215,6 +245,7 @@ function bindUI() {
   fov.value = settings.fov; fovVal.textContent = settings.fov;
   fov.addEventListener('input', () => {
     settings.fov = parseFloat(fov.value);
+    settings.fovTouched = true;   // comfort mode no longer overrides FOV
     fovVal.textContent = settings.fov;
     camera.fov = settings.fov; camera.updateProjectionMatrix();
     saveSettings();
@@ -270,6 +301,14 @@ function bindUI() {
     settings.fog = fog.checked;
     setFogEnabled(settings.fog);
     saveSettings();
+  });
+
+  // comfort mode (防眩晕)
+  const comfort = document.getElementById('comfortMode');
+  comfort.checked = settings.comfort;
+  comfort.addEventListener('change', () => {
+    applyComfort(comfort.checked);
+    renderer.shadowMap.needsUpdate = true;
   });
 
   // keyboard
@@ -535,7 +574,8 @@ function updatePlayer(dt) {
 // ===========================================================================
 function updateCamera(dt) {
   if (view === 'fp') {
-    const blend = REDUCED_MOTION ? 1 : 1 - Math.exp(-dt * 18);
+    // comfort mode: mouse look snaps 1:1 (zero smoothing — reduces sim sickness)
+    const blend = (REDUCED_MOTION || settings.comfort) ? 1 : 1 - Math.exp(-dt * 18);
     const yawDelta = Math.atan2(
       Math.sin(player.yaw - player.lookYaw),
       Math.cos(player.yaw - player.lookYaw),

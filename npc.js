@@ -131,14 +131,16 @@ function addNPC(instance, opts) {
   return npc;
 }
 
-function switchClip(npc, clipName, speed = 1) {
+function switchClip(npc, clipName, speed = 1, dt = 0) {
   if (!clipName) return;
   const clips = npc.group.animations || [];
   const clip = clips.find(c => c.name.toLowerCase().includes(clipName.toLowerCase()));
   if (!clip || !npc.mixer) return;
   if (npc.curAction && npc.curAction._clip === clip) {
-    // same clip: just adapt playback speed so feet don't skate
-    npc.curAction.timeScale = speed;
+    // same clip: ease playback speed toward the target so feet don't skate or
+    // stutter when the physical speed jitter frame-to-frame
+    const t = dt > 0 ? Math.min(1, dt * 5) : 1;
+    npc.curAction.timeScale += (speed - npc.curAction.timeScale) * t;
     return;
   }
   const action = npc.mixer.clipAction(clip);
@@ -462,7 +464,11 @@ export function updateNPCs(dt, nightAmount = 0) {
       const dy0 = ((desiredYaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
       const turnFactor = Math.abs(dy0) > 0.9 ? 0.15 : 1.0;
       const sp = n.speed * (nightAmount > 0.5 ? 0.6 : 1) * turnFactor;
-      n.vel.x = tmp.x * sp; n.vel.z = tmp.z * sp;
+      // ease the velocity toward the desired one — hard assignments make the
+      // gait stutter when the turn factor flips frame-to-frame
+      const k = Math.min(1, dt * 10);
+      n.vel.x += (tmp.x * sp - n.vel.x) * k;
+      n.vel.z += (tmp.z * sp - n.vel.z) * k;
       n.yaw = desiredYaw;
     } else {
       n.vel.multiplyScalar(0.8);
@@ -506,16 +512,45 @@ export function updateNPCs(dt, nightAmount = 0) {
     [n.pos.x, n.pos.z] = clampTown(n.pos.x, n.pos.z);
 
     const moveX = n.pos.x - previousX, moveZ = n.pos.z - previousZ;
-    const actualSpeed = Math.hypot(moveX, moveZ) / Math.max(dt, 0.0001);
+    const rawSpeed = Math.hypot(moveX, moveZ) / Math.max(dt, 0.0001);
+    // EMA smoothing — physical speed jitter (collider pushes, crowding) must
+    // not feed straight into animation playback or the gait stutters
+    n.smoothSpeed = (n.smoothSpeed ?? 0) + (rawSpeed - (n.smoothSpeed ?? 0)) * Math.min(1, dt * 6);
+    const actualSpeed = n.smoothSpeed;
+
+    // hysteresis for facing updates only
     const nowMoving = n.locomotionMoving ? actualSpeed > 0.05 : actualSpeed > 0.12;
     n.locomotionMoving = nowMoving;
     if (nowMoving) n.yaw = Math.atan2(moveX, moveZ);
 
+    // ---- locomotion state machine ----
+    // Clip switches are expensive (0.28s crossfade + restart). Requiring the
+    // opposite condition to hold for 0.3s kills the frame-level Walk<->Idle
+    // thrash seen when NPCs jostle against each other or walls.
+    const wantState = actualSpeed > (n.locoState === 'walk' ? 0.06 : 0.16) ? 'walk' : 'idle';
+    if (wantState !== n.locoState) {
+      n.locoTimer = (n.locoTimer ?? 0) + dt;
+      if (n.locoTimer >= 0.3) {
+        n.locoState = wantState;
+        n.locoTimer = 0;
+      }
+    } else {
+      n.locoTimer = 0;
+    }
+
     if (actualSpeed < 0.04 && dist > 0.5) {
       n.stuckT = (n.stuckT || 0) + dt;
       if (n.stuckT > 0.8) {
-        n.target.copy(n.pos);
-        n.waitT = 0;
+        // escape: pick a fresh random reachable spot nearby and pause briefly —
+        // re-targeting the same unreachable point caused a visible
+        // start-stuck-start stutter loop
+        for (let tries = 0; tries < 8; tries++) {
+          const a = Math.random() * Math.PI * 2;
+          const rr = 2 + Math.random() * 2;
+          const [ex, ez] = clampTown(n.pos.x + Math.cos(a) * rr, n.pos.z + Math.sin(a) * rr);
+          if (!blocked(ex, ez, 0.6)) { n.target.set(ex, 0, ez); break; }
+        }
+        n.waitT = 0.8 + Math.random() * 0.6;
         n.vel.set(0, 0, 0);
         n.stuckT = 0;
       }
@@ -526,20 +561,21 @@ export function updateNPCs(dt, nightAmount = 0) {
     n.group.position.x = n.pos.x;
     n.group.position.z = n.pos.z;
     const dy = ((n.yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
-    if (Math.abs(dy) > 0.7) {
+    // only snap instantly for near-opposite turns; small corrections ease out
+    if (Math.abs(dy) > 1.8) {
       n.group.rotation.y = n.yaw;
     } else {
-      n.group.rotation.y += dy * Math.min(1, dt * 14);
+      n.group.rotation.y += dy * Math.min(1, dt * 18);
     }
 
-    if (nowMoving) {
+    if (n.locoState === 'walk') {
       const naturalSpeed = n.type === 'villager' ? 1.3 : 0.55;
       const clipSpeed = Math.min(1.6, Math.max(0.5, actualSpeed / naturalSpeed));
-      switchClip(n, n.walkClip, clipSpeed);
+      switchClip(n, n.walkClip, clipSpeed, dt);
     } else if (!updateInteraction(n, dt)) {
-      switchClip(n, n.idleClip, 1.0);
+      switchClip(n, n.idleClip, 1.0, dt);
     }
-    applyGait(n, dt, nowMoving, actualSpeed);
+    applyGait(n, dt, n.locoState === 'walk', actualSpeed);
   }
 }
 
