@@ -240,6 +240,19 @@
     }
   },
 
+  "characters": {
+    "defaultPalette": 0,
+    "palettes": [
+      { "name": "布衣青衫", "colors": { "skin": "0xd8a97f", "hair": "0x2b1f18", "eyes": "0x2a2a2a", "shirt": "0x496a86", "pants": "0x3d4250", "socks": "0xe8e2d6", "shoes": "0x2c2622" } },
+      { "name": "靛蓝短褐", "colors": { "skin": "0xd8a97f", "hair": "0x1d1714", "eyes": "0x22242a", "shirt": "0x35527a", "pants": "0x2f3b52", "socks": "0xddd8cc", "shoes": "0x24201d" } },
+      { "name": "茶肆伙计", "colors": { "skin": "0xc58d64", "hair": "0x241a15", "eyes": "0x2a2622", "shirt": "0x7a5233", "pants": "0x4a3b30", "socks": "0xe0d8c8", "shoes": "0x2f2822" } },
+      { "name": "客栈掌柜", "colors": { "skin": "0xe0b795", "hair": "0x554b42", "eyes": "0x2a2a2a", "shirt": "0x7c3b32", "pants": "0x3a3230", "socks": "0xe8e4dc", "shoes": "0x2b2520" } },
+      { "name": "青衫书生", "colors": { "skin": "0xe5b793", "hair": "0x1a1512", "eyes": "0x24242a", "shirt": "0x8fa6a0", "pants": "0x4b5b63", "socks": "0xf0ece4", "shoes": "0x2e2824" } },
+      { "name": "田间农妇", "colors": { "skin": "0xa97450", "hair": "0x201814", "eyes": "0x26221f", "shirt": "0x4a6b52", "pants": "0x3d4a3c", "socks": "0xd8d0c0", "shoes": "0x2a251f" } },
+      { "name": "绸缎商贾", "colors": { "skin": "0xd6a279", "hair": "0x1f1915", "eyes": "0x2b2622", "shirt": "0x6c4a72", "pants": "0x33313a", "socks": "0xe6e0d4", "shoes": "0x241f1c" } }
+    ]
+  },
+
   "assets": {
     "base": "./assets/models/",
     "concurrency": 3,

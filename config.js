@@ -7,7 +7,7 @@
 
 const REQUIRED_SECTIONS = [
   'meta', 'town', 'buildings', 'scenery', 'environment',
-  'npcs', 'commerce', 'player', 'assets',
+  'npcs', 'commerce', 'player', 'assets', 'characters',
 ];
 
 const ANGLE_TOKENS = {

@@ -4,7 +4,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-import { CONFIG, angle } from './config.js';
+import { CONFIG, angle, color } from './config.js';
 
 const ASSET_CFG = CONFIG.assets;
 
@@ -39,13 +39,56 @@ function convertMaterials(root) {
   });
 }
 
+// 角色部位表：id 与材质组名归一化后的结果一一对应。
+// 这是模型结构的一部分（不是可调设计数据），故固定在代码里；配色本身在配置里。
+export const CHARACTER_PARTS = Object.freeze([
+  { id: 0, key: 'other', label: '其他' },
+  { id: 1, key: 'skin',  label: '肤色' },
+  { id: 2, key: 'hair',  label: '发色' },
+  { id: 3, key: 'eyes',  label: '眼睛' },
+  { id: 4, key: 'shirt', label: '上衣' },
+  { id: 5, key: 'pants', label: '裤装' },
+  { id: 6, key: 'socks', label: '袜' },
+  { id: 7, key: 'shoes', label: '鞋' },
+]);
+
+// FBX 材质组名 -> 部位 id。顺序即优先级，命中即停。
+const PART_PATTERNS = [
+  [1, /skin|face|head|neck|hand/],
+  [2, /hair|brow|lash/],
+  [3, /eye|pupil|iris/],
+  [4, /shirt|cloth|torso|sleeve|coat|jacket|top/],
+  [5, /pant|trouser|bottom|skirt|leg/],
+  [6, /sock|stocking/],
+  [7, /shoe|boot|sandal|foot/],
+];
+
+function partIdFromName(name) {
+  const n = (name || '').toLowerCase();
+  for (const [id, pattern] of PART_PATTERNS) if (pattern.test(n)) return id;
+  return 0;
+}
+
 function flattenSolidSkinnedMaterials(root) {
   root.traverse(mesh => {
     if (!mesh.isSkinnedMesh || !Array.isArray(mesh.material) || !mesh.geometry.groups.length) return;
     const materials = mesh.material;
-    if (materials.some(m => m.map || m.transparent)) return;
     const geometry = mesh.geometry;
     const count = geometry.attributes.position.count;
+
+    // 关键：在 flatten 合并材质之前，把每个顶点归属的部位存成顶点属性。
+    // 之后 7 个材质合并成一个，仍能按部位精确改色（主场景 NPC 与资产馆共用）。
+    const partIds = new Float32Array(count);
+    for (const group of geometry.groups) {
+      const id = partIdFromName(materials[group.materialIndex]?.name);
+      for (let i = group.start; i < group.start + group.count; i++) {
+        const vertex = geometry.index ? geometry.index.getX(i) : i;
+        partIds[vertex] = id;
+      }
+    }
+    geometry.setAttribute('partId', new THREE.BufferAttribute(partIds, 1));
+
+    if (materials.some(m => m.map || m.transparent)) return;
     const colors = new Float32Array(count * 3).fill(1);
     for (const group of geometry.groups) {
       const material = materials[group.materialIndex];
@@ -180,44 +223,79 @@ export async function preloadAssets(onProgress) {
 // need a proper skeleton clone — use THREE's clone for skinned via SkeletonUtils.
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 
-const SKIN_TONES = [0xd8a97f, 0xc58d64, 0x9c6647, 0xe5b793, 0x70452f, 0xb97d5c];
-const CLOTH_COLORS = [0x496a86, 0x8e4b3f, 0x547147, 0x80623c, 0x765b8b, 0xa27c3d, 0x3e7b72];
+const CHAR_CFG = CONFIG.characters || {};
 
-function applyCharacterVariant(root, variant) {
-  const skin = new THREE.Color(SKIN_TONES[variant % SKIN_TONES.length]);
-  const cloth = new THREE.Color(CLOTH_COLORS[(variant * 3 + 1) % CLOTH_COLORS.length]);
+// 配置缺失时的回退色板，保持改造前的视觉连续性。
+const FALLBACK_SKIN = [0xd8a97f, 0xc58d64, 0x9c6647, 0xe5b793, 0x70452f, 0xb97d5c];
+const FALLBACK_CLOTH = [0x496a86, 0x8e4b3f, 0x547147, 0x80623c, 0x765b8b, 0xa27c3d, 0x3e7b72];
+
+const pick = (list, i) => list[((i % list.length) + list.length) % list.length];
+
+/** 取第 variant 套人物配色（部位 -> THREE.Color）。配置优先，缺失则回退旧色板。 */
+export function characterPalette(variant = 0) {
+  const palettes = CHAR_CFG.palettes;
+  if (Array.isArray(palettes) && palettes.length) {
+    const preset = pick(palettes, variant);
+    const out = {};
+    for (const part of CHARACTER_PARTS) {
+      if (part.key === 'other') continue;
+      const raw = preset.colors?.[part.key] ?? preset[part.key];
+      if (raw !== undefined && raw !== null) out[part.key] = new THREE.Color(color(raw));
+    }
+    return out;
+  }
+  const skin = new THREE.Color(pick(FALLBACK_SKIN, variant));
+  const cloth = new THREE.Color(pick(FALLBACK_CLOTH, variant * 3 + 1));
+  return { skin, shirt: cloth, pants: cloth };
+}
+
+/**
+ * 按部位给角色实例上色。colors: { skin, hair, shirt, ... } -> THREE.Color | hex。
+ * 只改当前实例的顶点色：首次调用 clone geometry（不污染模板），后续原地更新。
+ * 没有 partId 顶点属性的网格会被跳过（非人物模型安全）。
+ */
+export function applyCharacterColors(root, colors) {
+  if (!colors || !Object.keys(colors).length) return;
   root.traverse(mesh => {
     if (!mesh.isSkinnedMesh) return;
     mesh.frustumCulled = false;
-    const source = mesh.geometry.getAttribute('color');
-    if (!source) return;
-    mesh.geometry = mesh.geometry.clone();
-    const colors = mesh.geometry.getAttribute('color');
-    for (let i = 0; i < source.count; i++) {
-      const r = source.getX(i), g = source.getY(i), b = source.getZ(i);
-      const isSkin = r > 0.16 && g > 0.05 && r > g * 1.03 && g > b * 1.01;
-      const isCoolCloth = (b >= r || g >= r) && Math.max(r, g, b) > 0.18 && Math.max(r, g, b) - Math.min(r, g, b) > 0.06;
-      const isCloth = !isSkin && isCoolCloth && Math.min(r, g, b) < 0.75;
-      if (!isSkin && !isCloth) continue;
-      const color = isSkin ? skin : cloth;
-      colors.setXYZ(i,
-        color.r * 0.85 + r * 0.15,
-        color.g * 0.85 + g * 0.15,
-        color.b * 0.85 + b * 0.15,
-      );
+    if (!mesh.geometry.getAttribute('partId')) return;
+    if (!mesh.geometry.userData.colorized) {
+      mesh.geometry = mesh.geometry.clone();
+      mesh.geometry.userData.colorized = true;
     }
-    colors.needsUpdate = true;
+    const geometry = mesh.geometry;
+    const partAttr = geometry.getAttribute('partId');
+    let colorAttr = geometry.getAttribute('color');
+    if (!colorAttr) {
+      colorAttr = new THREE.BufferAttribute(new Float32Array(partAttr.count * 3).fill(1), 3);
+      geometry.setAttribute('color', colorAttr);
+      geometry.material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 });
+    }
+    for (let i = 0; i < partAttr.count; i++) {
+      const key = CHARACTER_PARTS[Math.round(partAttr.getX(i))]?.key;
+      const raw = key && colors[key];
+      if (!raw) continue;
+      const c = raw.isColor ? raw : new THREE.Color(color(raw));
+      colorAttr.setXYZ(i, c.r, c.g, c.b);
+    }
+    colorAttr.needsUpdate = true;
   });
 }
 
-export function instantiate(template, { x = 0, z = 0, rotY = 0, scale = 1, variant = 0 } = {}) {
+export function applyCharacterVariant(root, variant) {
+  applyCharacterColors(root, characterPalette(variant));
+}
+
+export function instantiate(template, { x = 0, z = 0, rotY = 0, scale = 1, variant = 0, colors = null } = {}) {
   if (!template) return null;
   const obj = skeletonClone(template);
   obj.position.set(x, 0, z);
   obj.rotation.y = rotY;
   obj.scale.setScalar(scale);
   obj.traverse(mesh => { if (mesh.isSkinnedMesh) mesh.frustumCulled = false; });
-  if (variant) applyCharacterVariant(obj, variant);
+  if (colors) applyCharacterColors(obj, colors);
+  else if (variant) applyCharacterVariant(obj, variant);
   // SkeletonUtils.clone JSON-serializes userData (destroying AnimationClips),
   // so re-attach the live clips from the template as a direct property.
   obj.animations = template.animations || [];

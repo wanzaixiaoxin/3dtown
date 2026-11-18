@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
-import { loadFBX, instantiate, MODEL_SPECS } from './assets.js';
+import { loadFBX, instantiate, MODEL_SPECS, CHARACTER_PARTS, applyCharacterColors } from './assets.js';
+import { CONFIG } from './config.js';
 import { applyGait, createGaitState } from './npc.js';
 
 const MODEL_CATEGORIES = new Set(['npc', 'people', 'buildings', 'objects']);
@@ -65,6 +66,7 @@ const dom = Object.fromEntries([
   'liveBadge', 'loading', 'loadingText', 'loadError', 'errorText', 'retryButton', 'assetFile',
   'assetSize', 'assetClips', 'clipSelect', 'speedInput', 'speedValue', 'playButton', 'rotateInput', 'resetButton',
   'detailLabel0', 'detailLabel1', 'detailLabel2',
+  'palettePreset', 'paletteReset', 'paletteRandom', 'paletteSwatches',
 ].map(id => [id, document.getElementById(id)]));
 
 const params = new URLSearchParams(location.search);
@@ -78,6 +80,7 @@ let playing = true;
 let loadSerial = 0;
 let previewObjects = [];
 let previewResources = [];
+let characterColors = {};   // 部位 key -> "#rrggbb"，当前预览的角色配色
 let currentEnv = null;
 const templatePromises = new Map();
 const textureLoader = new THREE.TextureLoader();
@@ -217,6 +220,87 @@ function setDetailLabels() {
 function setControlsForKind() {
   const show = isModelCategory();
   document.querySelectorAll('.model-only').forEach(el => { el.style.display = show ? '' : 'none'; });
+  const isCharacter = activeCategory === 'people';
+  document.querySelectorAll('.character-only').forEach(el => { el.style.display = isCharacter ? '' : 'none'; });
+  dom.viewport.dataset.character = isCharacter ? '1' : '0';
+}
+
+// ---- 人物配色：预设来自 town.config.json，部位来自模型材质组 ----
+const paletteParts = CHARACTER_PARTS.filter(part => part.key !== 'other');
+const colorPresets = CONFIG.characters?.palettes || [];
+
+function inputHex(value) {
+  if (typeof value === 'number') return `#${value.toString(16).padStart(6, '0')}`;
+  if (typeof value === 'string' && value.startsWith('0x')) return `#${value.slice(2)}`;
+  return value;
+}
+
+function syncPaletteInputs() {
+  paletteParts.forEach(({ key }) => {
+    const input = dom.paletteSwatches.querySelector(`input[data-part="${key}"]`);
+    if (input && characterColors[key]) input.value = characterColors[key];
+  });
+}
+
+function applyPaletteToModel() {
+  if (currentModel && activeCategory === 'people') applyCharacterColors(currentModel, characterColors);
+}
+
+// 某些模型定义了材质组但没有对应几何体（如 manA 的 Shoes）。
+// 按实际 partId 分布灰显无效部位，避免取色器点了没反应。
+function syncPaletteParts() {
+  const present = new Set();
+  currentModel?.traverse(mesh => {
+    if (!mesh.isSkinnedMesh) return;
+    const partAttr = mesh.geometry.getAttribute('partId');
+    if (!partAttr) return;
+    for (let i = 0; i < partAttr.count; i++) present.add(Math.round(partAttr.getX(i)));
+  });
+  paletteParts.forEach(part => {
+    dom.paletteSwatches.querySelector(`[data-part="${part.key}"]`)
+      ?.classList.toggle('unavailable', !present.has(part.id));
+  });
+}
+
+function applyPalettePreset(index) {
+  if (!colorPresets.length) return;
+  const i = ((index % colorPresets.length) + colorPresets.length) % colorPresets.length;
+  const preset = colorPresets[i];
+  characterColors = {};
+  paletteParts.forEach(({ key }) => {
+    const raw = preset.colors?.[key] ?? preset[key];
+    if (raw !== undefined && raw !== null) characterColors[key] = inputHex(raw);
+  });
+  dom.palettePreset.value = String(i);
+  syncPaletteInputs();
+  applyPaletteToModel();
+}
+
+function randomizePalette() {
+  if (!colorPresets.length) return;
+  paletteParts.forEach(({ key }) => {
+    const preset = colorPresets[Math.floor(Math.random() * colorPresets.length)];
+    const raw = preset.colors?.[key] ?? preset[key];
+    if (raw !== undefined && raw !== null) characterColors[key] = inputHex(raw);
+  });
+  syncPaletteInputs();
+  applyPaletteToModel();
+}
+
+function initPaletteControls() {
+  dom.palettePreset.innerHTML = colorPresets.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+  dom.paletteSwatches.innerHTML = paletteParts.map(part =>
+    `<label class="palette-swatch" data-part="${part.key}" title="${part.label}"><input type="color" data-part="${part.key}" value="#d8a97f" /><span>${part.label}</span></label>`
+  ).join('');
+  dom.paletteSwatches.addEventListener('input', event => {
+    const key = event.target.dataset.part;
+    if (!key) return;
+    characterColors[key] = event.target.value;
+    applyPaletteToModel();
+  });
+  dom.palettePreset.addEventListener('change', () => applyPalettePreset(Number(dom.palettePreset.value)));
+  dom.paletteReset.addEventListener('click', () => applyPalettePreset(CONFIG.characters?.defaultPalette ?? 0));
+  dom.paletteRandom.addEventListener('click', randomizePalette);
 }
 
 function clearAsset() {
@@ -390,6 +474,10 @@ async function loadModelAsset(entry, serial) {
   dom.assetClips.textContent = currentModel.animations.length ? `${currentModel.animations.length} 个片段` : '无骨骼动画';
   dom.liveBadge.textContent = '模型预览';
   dom.liveBadge.classList.add('static');
+  if (activeCategory === 'people') {
+    syncPaletteParts();
+    applyPalettePreset(CONFIG.characters?.defaultPalette ?? 0);
+  }
   setupAnimations();
   fitCamera();
 }
@@ -531,6 +619,7 @@ dom.retryButton.addEventListener('click', () => selectAsset(activeId));
 
 document.querySelectorAll('.category').forEach(button => button.classList.toggle('active', button.dataset.category === activeCategory));
 if (!itemEntries().some(item => item.id === activeId)) activeId = itemEntries()[0].id;
+initPaletteControls();
 renderList();
 selectAsset(activeId);
 

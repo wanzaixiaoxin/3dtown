@@ -53,6 +53,16 @@
 
       <div class="viewport-hint">拖动旋转 · 滚轮缩放 · 右键平移</div>
 
+      <section class="palette-dock character-only" aria-label="人物配色">
+        <div class="palette-head">
+          <span>人物配色</span>
+          <select id="palettePreset" aria-label="配色预设"></select>
+          <button class="mini-button" id="paletteReset" type="button">重置</button>
+          <button class="mini-button" id="paletteRandom" type="button">随机</button>
+        </div>
+        <div class="palette-swatches" id="paletteSwatches"></div>
+      </section>
+
       <section class="control-dock" aria-label="预览控制">
         <label class="control clip-control model-only"><span>动画片段</span><select id="clipSelect" disabled><option>加载中</option></select></label>
         <label class="control speed-control model-only"><span>播放速度 <output id="speedValue">1.0×</output></span><input id="speedInput" type="range" min="0.2" max="2" step="0.1" value="1" /></label>
