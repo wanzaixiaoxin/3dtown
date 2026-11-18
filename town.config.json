@@ -1,0 +1,267 @@
+{
+  "meta": {
+    "version": 1,
+    "description": "古镇小镇集中配置：分类管理 / 集中调度 / 性能平衡",
+    "units": "1 unit = 1 meter"
+  },
+
+  "town": {
+    "half": 46,
+    "plot": { "x": 24.5, "z": 16, "halfW": 11, "halfD": 10 }
+  },
+
+  "buildings": {
+    "grid": {
+      "seed": 1,
+      "blockOffsets": [16, 28],
+      "runs": [-34, -20, 20, 34],
+      "size": { "w": [5, 7.5], "d": [5, 6.8], "h": [4, 5.6] },
+      "flankSize": { "w": [5, 7], "d": [5, 6.5], "h": [4, 5.6] },
+      "gap": 0.3
+    },
+    "roofMaterials": ["roofBlue", "roofBrown", "roofGrey"],
+    "wallMaterials": ["plaster", "plasterWarm"],
+    "reserved": [
+      { "x": -26, "z": 26, "r": 11 },
+      { "x": -13, "z": 20, "r": 8.5 },
+      { "x": -34, "z": 18, "r": 5 },
+      { "x": -30, "z": 30, "r": 4 },
+      { "x": 30, "z": -34, "r": 10 }
+    ],
+    "pavilion": {
+      "x": 17, "z": 0, "w": 6.5, "d": 6.5, "h": 5.4,
+      "roofH": 2.2, "rotY": "PI", "tier": { "w": 3.6, "h": 1.7, "d": 3.6 },
+      "tierRoof": { "r": 3.8, "h": 1.7, "segments": 4 }
+    },
+    "walls": { "height": 3.6, "thickness": 1.4, "inset": 5, "offset": 2.5 },
+    "ladders": [
+      { "x": 12, "z": "H-0.9", "baseY": 0, "topY": 3.6, "facing": { "x": 0, "z": -1 } },
+      { "x": "-H+0.9", "z": 10, "baseY": 0, "topY": 3.6, "facing": { "x": 1, "z": 0 } },
+      { "x": "PVX+3.5", "z": 0, "baseY": 0, "topY": 5.4, "facing": { "x": 1, "z": 0 } }
+    ],
+    "heroes": [
+      { "asset": "house1", "x": -8, "z": -9, "rotY": 0.35 },
+      { "asset": "house2", "x": 9, "z": -9, "rotY": -0.3 },
+      { "asset": "building4", "x": -9, "z": 9, "rotY": "PI+0.2" },
+      { "asset": "building2s", "x": 9, "z": 9, "rotY": "PI-0.25" }
+    ],
+    "farms": [
+      { "asset": "windmill", "x": -38, "z": -8, "rotY": 0.6, "colliderTop": 9.0, "kind": "tower" },
+      { "asset": "barn", "x": 39, "z": 16, "rotY": -0.4, "colliderTop": 4.5, "kind": "house" },
+      { "asset": "coop", "x": 40, "z": 30, "rotY": 0.8, "colliderTop": 2.0, "kind": "house" }
+    ],
+    "shopShell": { "w": 4.8, "d": 3.4, "h": 8.4, "stories": 3, "roofH": 1.8 }
+  },
+
+  "scenery": {
+    "exclusion": {
+      "roadHalf": 7,
+      "shopRow": { "center": 10, "band": 4, "minZ": 12 },
+      "pond": { "x": -26, "z": 26, "r": 10 },
+      "pavilion": { "x": -13, "z": 20, "r": 8 },
+      "garden": { "x": 30, "z": -34, "r": 10 },
+      "plotPad": 3
+    },
+    "roads": { "width": 9, "plazaRadius": 11, "ringInner": 10.2, "ringOuter": 10.9, "cobbles": 900 },
+    "treeSpots": [
+      [-34, 12], [34, -12], [-12, 34], [12, -34], [-40, -30], [40, 30],
+      [-20, 20], [20, -20], [-30, -14], [30, 14], [-8, 30], [8, -30],
+      [-36, 36], [36, -36], [-24, 8], [24, -8], [-16, 24], [16, -24],
+      [42, 0], [-42, 0], [0, 40], [0, -40], [-30, 40], [30, -40]
+    ],
+    "treeScale": { "base": 0.85, "step": 0.12, "cycle": 4 },
+    "lampPositions": [
+      [6, 12], [-6, 12], [6, -12], [-6, -12],
+      [6, 24], [-6, 24], [6, -24], [-6, -24],
+      [12, 6], [-12, 6], [12, -6], [-12, -6],
+      [24, 6], [-24, 6], [24, -6], [-24, -6]
+    ],
+    "nightLights": {
+      "spots": [[0, -1.5], [12, 6], [-12, 6], [12, -6], [-12, -6], [0, 20], [0, -20], [0, 34], [17, 0]],
+      "color": "0xffb060", "distance": 30, "decay": 2,
+      "height": 3.4, "baseIntensity": 9, "intensityStep": 2.5, "intensityCycle": 3
+    },
+    "calls": [
+      { "fn": "pond", "args": [-26, 26, 8] },
+      { "fn": "pavilion", "args": [-13, 20, 1.0] },
+      { "fn": "rockery", "args": [-34, 18, 1.3] },
+      { "fn": "rockery", "args": [-30, 30, 1.0] },
+      { "fn": "garden", "args": [30, -34, 13] },
+      { "fn": "willow", "args": [-34, 26, 1.1] },
+      { "fn": "willow", "args": [-20, 14, 1.0] },
+      { "fn": "willow", "args": [-26, 36, 1.05] },
+      { "fn": "willow", "args": [-36, 34, 0.95] },
+      { "fn": "willow", "args": [24, 33, 1.0] },
+      { "fn": "flowerBed", "args": [24, -26, 3.0, 140] },
+      { "fn": "flowerBed", "args": [38, -30, 2.5, 100, ["petalYellow", "petalWhite", "petalPink"]] },
+      { "fn": "flowerBed", "args": [-20, 34, 2.2, 90, ["petalRed", "petalPink"]] },
+      { "fn": "flowerBed", "args": [18, 30, 2.4, 100] },
+      { "fn": "flowerBed", "args": [12, -30, 2.0, 80, ["petalYellow", "petalWhite"]] },
+      { "fn": "bush", "args": [[-12, 26], [10, 34], [-38, 8], [36, 8], [26, 20], [-24, -30], [30, -18], [-8, -34]], "scale": [0.65, 0.18, 3] },
+      { "fn": "pine", "args": [-36, 22, 1.0] },
+      { "fn": "pine", "args": [-30, 38, 0.9] },
+      { "fn": "pine", "args": [26, -38, 1.0] },
+      { "fn": "pine", "args": [38, -24, 0.85] },
+      { "fn": "pine", "args": [-40, -18, 1.05] },
+      { "fn": "pine", "args": [40, -2, 0.95] },
+      { "fn": "bamboo", "args": [-37, 6, 11, 1.0] },
+      { "fn": "bamboo", "args": [36, 30, 9, 0.95] },
+      { "fn": "bamboo", "args": [-20, -36, 8, 0.9] },
+      { "fn": "waterfall", "args": [-30, 1.5, 31.6, 2.0, 3.4, 0] },
+      { "fn": "boat", "args": [-21.5, 21.5, -0.7, 1.0] },
+      { "fn": "lanternString", "args": [-9, 10.5, 9, 10.5, 4.4, 9, 0.7] },
+      { "fn": "lanternString", "args": [-9, -10.5, 9, -10.5, 4.4, 9, 0.7] },
+      { "fn": "lanternString", "args": [10.5, -9, 10.5, 9, 4.4, 9, 0.7] },
+      { "fn": "banner", "args": [6.4, 6.2, "酒", -0.4] },
+      { "fn": "banner", "args": [-7.2, -6.4, "茶", 0.5] },
+      { "fn": "banner", "args": [15.4, -3.2, "客栈", -1.2] },
+      { "fn": "bronzeDing", "args": [3.6, 4.2, 0.9] },
+      { "fn": "stoneLion", "args": [-4.6, 43.2, 0.95, "PI"] },
+      { "fn": "stoneLion", "args": [4.6, 43.2, 0.95, "PI"] }
+    ]
+  },
+
+  "environment": {
+    "initialFog": { "color": "0xc8d8e2", "near": 70, "far": 260, "enabled": false },
+    "lights": {
+      "hemi": { "sky": "0xbfd4e8", "ground": "0x6b5a44", "intensity": 1.0 },
+      "ambient": { "color": "0x556270", "intensity": 0.3 },
+      "sun": { "color": "0xfff4dd", "intensity": 2.6, "position": [40, 80, 30], "shadowMap": 1024 },
+      "rim": { "color": "0x9db8d6", "intensity": 0.5, "position": [-40, 30, -50], "nightFade": 0.7 }
+    },
+    "decor": { "petals": [38, 300], "mist": 14, "rain": 1800 },
+    "stars": { "opacityScale": 1.2, "opacityOffset": -0.15 },
+    "clouds": { "opacity": 0.5, "visibleBelow": 0.85 },
+    "weather": {
+      "rain": {
+        "fogColor": "0x8d99a6", "fogNearScale": 0.45, "fogFarScale": 0.55,
+        "sunScale": 0.55, "nightSkyScale": 0.55
+      }
+    },
+    "envMapIntensity": { "morning": 0.12, "noon": 0.1, "afternoon": 0.14, "night": 0.1 },
+    "emissive": {
+      "windowLit": { "base": 0.15, "scale": 2.6, "dayColor": "0x3a3630", "nightColor": "0x2a2016" },
+      "lantern": { "base": 0.2, "scale": 2.6 },
+      "lampGlow": { "base": 0.15, "scale": 3.4 }
+    },
+    "timePresets": {
+      "morning": {
+        "label": "清晨", "skyTop": "0x9fb6cf", "skyBot": "0xf0dcc0", "fog": "0xe2d4bc",
+        "fogNear": 90, "fogFar": 300, "hemiSky": "0xcfe0ee", "hemiGround": "0x7a6a50",
+        "hemiInt": 0.5, "sunColor": "0xffe0b0", "sunInt": 1.5, "sunPos": [-60, 40, 50],
+        "ambient": "0x3a4a5a", "ambientInt": 0.35, "exposure": 1.0, "nightAmount": 0.35
+      },
+      "noon": {
+        "label": "正午", "skyTop": "0x4f86c0", "skyBot": "0xcfe0ea", "fog": "0xc2d4e0",
+        "fogNear": 150, "fogFar": 430, "hemiSky": "0xbfd4e8", "hemiGround": "0x6b5a44",
+        "hemiInt": 0.5, "sunColor": "0xfff4dd", "sunInt": 2.3, "sunPos": [40, 80, 30],
+        "ambient": "0x556270", "ambientInt": 0.12, "exposure": 0.9, "nightAmount": 0.0
+      },
+      "afternoon": {
+        "label": "黄昏", "skyTop": "0x8a6ea8", "skyBot": "0xf0b070", "fog": "0xddaa78",
+        "fogNear": 90, "fogFar": 320, "hemiSky": "0xd8b898", "hemiGround": "0x6a5040",
+        "hemiInt": 0.5, "sunColor": "0xffb060", "sunInt": 1.9, "sunPos": [55, 26, -40],
+        "ambient": "0x4a3a48", "ambientInt": 0.35, "exposure": 1.02, "nightAmount": 0.45
+      },
+      "night": {
+        "label": "夜晚", "skyTop": "0x0b1526", "skyBot": "0x1e2b42", "fog": "0x162034",
+        "fogNear": 80, "fogFar": 300, "hemiSky": "0x3e5578", "hemiGround": "0x201a24",
+        "hemiInt": 0.55, "sunColor": "0xa9c2e8", "sunInt": 0.85, "sunPos": [-30, 70, -50],
+        "ambient": "0x33465f", "ambientInt": 0.9, "exposure": 1.25, "nightAmount": 1.0
+      }
+    }
+  },
+
+  "commerce": {
+    "types": [
+      { "sign": "酒", "name": "醉仙酒馆", "color": "#9e3f32" },
+      { "sign": "茶", "name": "清风茶肆", "color": "#3f7054" },
+      { "sign": "布", "name": "锦绣布庄", "color": "#526b9d" },
+      { "sign": "药", "name": "回春药铺", "color": "#527443" },
+      { "sign": "客栈", "name": "悦来客栈", "color": "#935c35" },
+      { "sign": "米", "name": "丰年米行", "color": "#a37b35" },
+      { "sign": "瓷", "name": "青瓷雅集", "color": "#39747b" },
+      { "sign": "书", "name": "文渊书肆", "color": "#695183" }
+    ],
+    "xOffset": 10.1,
+    "zPositions": [-38, -31.5, -25, -18.5, 18.5, 25, 31.5, 38],
+    "eastTypeShift": 3,
+    "keeper": { "xOffset": 7.85, "zOffset": 0.75 },
+    "customer": { "xOffset": 5.7, "zOffset": -0.75 },
+    "exclusion": { "x": -13, "z": 20, "r": 8.5 }
+  },
+
+  "npcs": {
+    "villagers": {
+      "count": 18,
+      "kinds": ["manA", "woman", "manB", "manA", "woman", "manB", "manA", "woman", "manB", "manA", "woman", "manB"],
+      "keeperCount": 6,
+      "travelerFrom": 14,
+      "speed": { "base": 0.7, "step": 0.09, "cycle": 5, "travelerScale": 1.1 },
+      "radius": 4,
+      "routeStep": 3,
+      "gateInward": 3.5,
+      "walkClip": "Walk", "idleClip": "Idle"
+    },
+    "gates": [
+      { "x": 0, "z": 44.5 }, { "x": 0, "z": -44.5 },
+      { "x": 44.5, "z": 0 }, { "x": -44.5, "z": 0 }
+    ],
+    "visitPoints": [
+      { "id": "well", "customer": { "x": 0, "z": 2.2 }, "keeper": { "x": 0, "z": -1.5 }, "sign": "取水" },
+      { "id": "pavilion", "customer": { "x": -9.5, "z": 17 }, "keeper": { "x": -13, "z": 20 }, "sign": "观景" }
+    ],
+    "animals": [
+      { "kind": "cow", "x": 20, "z": -20 }, { "kind": "cow", "x": -20, "z": -20 },
+      { "kind": "sheep", "x": 14, "z": -22 }, { "kind": "sheep", "x": -14, "z": -22 },
+      { "kind": "pig", "x": 22, "z": 8 }, { "kind": "pig", "x": -22, "z": 10 },
+      { "kind": "sheep", "x": 18, "z": 20 }, { "kind": "cow", "x": -18, "z": 18 }
+    ],
+    "animalSpeed": { "base": 0.45, "range": 0.2 },
+    "animalRadius": { "base": 5, "range": 4 },
+    "smalls": [
+      { "kind": "pug", "x": 6, "z": 10 }, { "kind": "pug", "x": -10, "z": 6 },
+      { "kind": "fox", "x": 24, "z": -6 }, { "kind": "fox", "x": -24, "z": -10 }
+    ],
+    "smallSpeed": { "base": 0.5, "range": 0.25 },
+    "smallRadius": { "base": 7, "range": 5 }
+  },
+
+  "player": {
+    "physics": {
+      "radius": 0.38, "eyeHeight": 1.66,
+      "walkSpeed": 2.4, "runSpeed": 5.2, "climbSpeed": 2.6,
+      "jumpSpeed": 6.4, "gravity": 20
+    },
+    "settings": {
+      "sensitivity": 0.8, "fov": 60, "walkSpeed": 2.4,
+      "invertY": false, "fog": false, "quality": "medium",
+      "weather": "clear", "comfort": false
+    }
+  },
+
+  "assets": {
+    "base": "./assets/models/",
+    "concurrency": 3,
+    "models": {
+      "house1": { "file": "House1.fbx", "targetHeight": 4.6 },
+      "house2": { "file": "House2.fbx", "targetHeight": 5.0 },
+      "building4": { "file": "Building4.fbx", "targetHeight": 10.2, "targetFootprint": 5.2 },
+      "building2s": { "file": "Building2_Small.fbx", "targetHeight": 4.2, "targetFootprint": 4.8 },
+      "well": { "file": "Well.fbx", "targetHeight": 1.25 },
+      "windmill": { "file": "Windmill.fbx", "targetHeight": 8.0 },
+      "barn": { "file": "Barn.fbx", "targetHeight": 4.8 },
+      "coop": { "file": "ChickenCoop.fbx", "targetHeight": 1.6 },
+      "cow": { "file": "Cow.fbx", "targetHeight": 1.45, "charFacePlusX": true, "fixFeetRig": true },
+      "horse": { "file": "Horse.fbx", "targetHeight": 1.9, "charFacePlusX": true, "fixFeetRig": true },
+      "sheep": { "file": "Sheep.fbx", "targetHeight": 0.85, "charFacePlusX": true, "fixFeetRig": true },
+      "pig": { "file": "Pig.fbx", "targetHeight": 0.65, "charFacePlusX": true, "fixFeetRig": true },
+      "pug": { "file": "Pug.fbx", "targetHeight": 0.35, "charFacePlusX": true, "fixFeetRig": true },
+      "fox": { "file": "animal_fox.fbx", "targetHeight": 0.5, "charFacePlusX": true, "modelYaw": "PI", "fixFeetRig": true },
+      "bird": { "file": "animal_bird.fbx", "targetHeight": 0.3, "charFacePlusX": true },
+      "manA": { "file": "char_male_casual.fbx", "targetHeight": 1.75, "charFacePlusX": true, "fixFeetRig": true },
+      "manB": { "file": "char_male_longsleeve.fbx", "targetHeight": 1.75, "feetScale": 0.8, "charFacePlusX": true, "fixFeetRig": true },
+      "woman": { "file": "char_female_casual.fbx", "targetHeight": 1.68, "feetScale": 0.8, "charFacePlusX": true, "fixFeetRig": true }
+    }
+  }
+}

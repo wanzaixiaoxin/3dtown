@@ -1,29 +1,22 @@
 import * as THREE from 'three';
+import { CONFIG, angle } from './config.js';
 import { M, trackGeo, disposables } from './materials.js';
 
-const TYPES = [
-  { sign: '酒', name: '醉仙酒馆', color: '#9e3f32' },
-  { sign: '茶', name: '清风茶肆', color: '#3f7054' },
-  { sign: '布', name: '锦绣布庄', color: '#526b9d' },
-  { sign: '药', name: '回春药铺', color: '#527443' },
-  { sign: '客栈', name: '悦来客栈', color: '#935c35' },
-  { sign: '米', name: '丰年米行', color: '#a37b35' },
-  { sign: '瓷', name: '青瓷雅集', color: '#39747b' },
-  { sign: '书', name: '文渊书肆', color: '#695183' },
-];
+const CC = CONFIG.commerce;
+const TYPES = CC.types;
 
 export const SHOPS = [];
 for (const side of [-1, 1]) {
-  [-38, -31.5, -25, -18.5, 18.5, 25, 31.5, 38].forEach((z, i) => {
-    const x = side * 10.1;
-    if (Math.hypot(x + 13, z - 20) < 8.5) return;
-    const type = TYPES[(i + (side > 0 ? 3 : 0)) % TYPES.length];
+  CC.zPositions.forEach((z, i) => {
+    const x = side * CC.xOffset;
+    if (Math.hypot(x - CC.exclusion.x, z - CC.exclusion.z) < CC.exclusion.r) return;
+    const type = TYPES[(i + (side > 0 ? CC.eastTypeShift : 0)) % TYPES.length];
     SHOPS.push({
       id: `${side < 0 ? 'west' : 'east'}-${z}`,
       side, x, z, ...type,
-      rotY: side < 0 ? -Math.PI / 2 : Math.PI / 2,
-      keeper: { x: side * 7.85, z: z + 0.75 },
-      customer: { x: side * 5.7, z: z - 0.75 },
+      rotY: side < 0 ? angle('-PI/2') : angle('PI/2'),
+      keeper: { x: side * CC.keeper.xOffset, z: z + CC.keeper.zOffset },
+      customer: { x: side * CC.customer.xOffset, z: z + CC.customer.zOffset },
     });
   });
 }

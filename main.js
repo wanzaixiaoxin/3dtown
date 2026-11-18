@@ -4,6 +4,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CONFIG } from './config.js';
 import { M, disposables, setPBRTextures } from './materials.js';
 import {
   TOWN, colliders, ladders, world as worldRef,
@@ -24,23 +25,10 @@ import {
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // player config (walkSpeed is user-adjustable via settings)
-const PLAYER = {
-  radius: 0.38, eyeHeight: 1.66,
-  walkSpeed: 2.4, runSpeed: 5.2, climbSpeed: 2.6,
-  jumpSpeed: 6.4, gravity: 20,
-};
+const PLAYER = { ...CONFIG.player.physics };
 
-// user settings (persisted)
-const settings = {
-  sensitivity: 0.8,
-  fov: 60,
-  walkSpeed: 2.4,
-  invertY: false,
-  fog: false,
-  quality: 'medium',
-  weather: 'clear',
-  comfort: false,
-};
+// user settings (persisted) — 默认值来自配置
+const settings = { ...CONFIG.player.settings };
 const SETTINGS_KEY = 'guzhen-settings-v3';
 function loadSettings() {
   try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch {}

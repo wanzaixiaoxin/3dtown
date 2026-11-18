@@ -3,6 +3,7 @@
 //  1 unit = 1 meter. All objects are seated on the ground (no floating).
 // ============================================================================
 import * as THREE from 'three';
+import { CONFIG, color, angle, expr } from './config.js';
 import { M, trackGeo, disposables } from './materials.js';
 import { batchStatic } from './optimize.js';
 import { instantiate } from './assets.js';
@@ -15,7 +16,12 @@ import {
   buildBoat, buildLanternString, buildBanner, buildMist, buildRain,
 } from './scenery.js';
 
-export const TOWN = { half: 46 };        // playable half-size (scene doubled vs v1)
+const TOWN_CFG = CONFIG.town;
+const BUILD_CFG = CONFIG.buildings;
+const SCENERY_CFG = CONFIG.scenery;
+const ENV_CFG = CONFIG.environment;
+
+export const TOWN = { half: TOWN_CFG.half };        // playable half-size (from config)
 export const colliders = [];             // {minX,maxX,minZ,maxZ,top,climbable?}
 export const ladders = [];
 export const lamps = [];                 // {x,z,y} light sources that glow at night
@@ -25,7 +31,8 @@ export const walkableLanes = [];         // for minimap roads
 // --- builder plot (我的城市) — reserved empty ground for the build module ---
 // Chosen to clear the east shop row (x≈10), hero houses, pavilion house (17,0)
 // and the barn (39,16): pad spans x 13.5–35.5, z 6–26.
-export const PLOT = { x: 24.5, z: 16, halfW: 11, halfD: 10 };
+const PLOT_CFG = TOWN_CFG.plot;
+export const PLOT = { x: PLOT_CFG.x, z: PLOT_CFG.z, halfW: PLOT_CFG.halfW, halfD: PLOT_CFG.halfD };
 
 export let world;
 
@@ -105,7 +112,9 @@ function addGrassPatches(parent) {
 // ---------------------------------------------------------------------------
 function buildRoads(parent) {
   const m = M();
+  const R = SCENERY_CFG.roads;
   const L = TOWN.half * 2;
+  const halfWidth = R.width / 2;
   // main N-S and E-W stone lanes
   const mkLane = (w, len, rotY, name) => {
     const g = trackGeo(new THREE.PlaneGeometry(w, len));
@@ -115,21 +124,21 @@ function buildRoads(parent) {
     parent.add(lane);
     return lane;
   };
-  mkLane(9, L, 0, 'road-ns');
-  mkLane(9, L, Math.PI / 2, 'road-ew');
-  walkableLanes.push({ type: 'h', half: 4.5 }, { type: 'v', half: 4.5 });
+  mkLane(R.width, L, 0, 'road-ns');
+  mkLane(R.width, L, Math.PI / 2, 'road-ew');
+  walkableLanes.push({ type: 'h', half: halfWidth }, { type: 'v', half: halfWidth });
 
   // central plaza
-  const plaza = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(11, 11, 0.02, 40)), m.stoneLt);
+  const plaza = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(R.plazaRadius, R.plazaRadius, 0.02, 40)), m.stoneLt);
   plaza.position.y = 0.05; plaza.receiveShadow = true; plaza.name = 'plaza';
   parent.add(plaza);
-  const ring = new THREE.Mesh(trackGeo(new THREE.RingGeometry(10.2, 10.9, 40)), m.stoneDk);
+  const ring = new THREE.Mesh(trackGeo(new THREE.RingGeometry(R.ringInner, R.ringOuter, 40)), m.stoneDk);
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.07; ring.receiveShadow = true;
   parent.add(ring);
 
   // cobble edging strips along lanes (instanced small flat stones, flush on road)
   const cobGeo = trackGeo(new THREE.BoxGeometry(0.32, 0.05, 0.28));
-  const count = 900;
+  const count = R.cobbles;
   const inst = new THREE.InstancedMesh(cobGeo, m.cobble, count);
   inst.receiveShadow = true; inst.name = 'cobbles';
   const d = new THREE.Object3D();
@@ -139,7 +148,7 @@ function buildRoads(parent) {
     let x, z;
     if (alongV) { x = (Math.random() - 0.5) * 8.4; z = (Math.random() - 0.5) * L; }
     else { x = (Math.random() - 0.5) * L; z = (Math.random() - 0.5) * 8.4; }
-    if (Math.abs(x) < 11.5 && Math.abs(z) < 11.5) continue;
+    if (Math.abs(x) < R.plazaRadius + 0.5 && Math.abs(z) < R.plazaRadius + 0.5) continue;
     d.position.set(x, 0.06, z);
     d.rotation.set(0, Math.random() * Math.PI, 0);
     const s = 0.6 + Math.random() * 0.5;
@@ -500,62 +509,47 @@ function buildSky(scene) {
   };
 }
 
-const TIME_PRESETS = {
-  morning: {
-    label: '清晨', skyTop: 0x9fb6cf, skyBot: 0xf0dcc0, fog: 0xe2d4bc, fogNear: 90, fogFar: 300,
-    hemiSky: 0xcfe0ee, hemiGround: 0x7a6a50, hemiInt: 0.5,
-    sunColor: 0xffe0b0, sunInt: 1.5, sunPos: [-60, 40, 50],
-    ambient: 0x3a4a5a, ambientInt: 0.35,
-    exposure: 1.0, nightAmount: 0.35,
-  },
-  noon: {
-    label: '正午', skyTop: 0x4f86c0, skyBot: 0xcfe0ea, fog: 0xc2d4e0, fogNear: 150, fogFar: 430,
-    hemiSky: 0xbfd4e8, hemiGround: 0x6b5a44, hemiInt: 0.5,
-    sunColor: 0xfff4dd, sunInt: 2.3, sunPos: [40, 80, 30],
-    ambient: 0x556270, ambientInt: 0.12,
-    exposure: 0.9, nightAmount: 0.0,
-  },
-  afternoon: {
-    label: '黄昏', skyTop: 0x8a6ea8, skyBot: 0xf0b070, fog: 0xddaa78, fogNear: 90, fogFar: 320,
-    hemiSky: 0xd8b898, hemiGround: 0x6a5040, hemiInt: 0.5,
-    sunColor: 0xffb060, sunInt: 1.9, sunPos: [55, 26, -40],
-    ambient: 0x4a3a48, ambientInt: 0.35,
-    exposure: 1.02, nightAmount: 0.45,
-  },
-  night: {
-    label: '夜晚', skyTop: 0x0b1526, skyBot: 0x1e2b42, fog: 0x162034, fogNear: 80, fogFar: 300,
-    hemiSky: 0x3e5578, hemiGround: 0x201a24, hemiInt: 0.55,
-    sunColor: 0xa9c2e8, sunInt: 0.85, sunPos: [-30, 70, -50], // moonlight
-    ambient: 0x33465f, ambientInt: 0.9,
-    exposure: 1.25, nightAmount: 1.0,
-  },
-};
+// 从配置派生，颜色字符串一次性转成 three.js 数值；运行时只读不改。
+const COLOR_KEYS = [
+  'skyTop', 'skyBot', 'fog', 'hemiSky', 'hemiGround', 'sunColor', 'ambient',
+];
+const TIME_PRESETS = Object.fromEntries(
+  Object.entries(ENV_CFG.timePresets).map(([key, preset]) => {
+    const normalized = { ...preset };
+    for (const name of COLOR_KEYS) normalized[name] = color(preset[name]);
+    return [key, normalized];
+  }),
+);
 
 export function setupEnvironment(scene) {
   env.scene = scene;
+  const L = ENV_CFG.lights;
+  const D = ENV_CFG.decor;
+  const F = ENV_CFG.initialFog;
   // sky
   env.sky = buildSky(scene);
   env.skyMat = null;
   env.skyDecor = buildSkyDecor(scene);
-  env.petals = buildPetals(scene, 38, 300);
-  env.mist = buildMist(scene, 14);
-  buildRain(scene, 1800);
-  env.fog = new THREE.Fog(0xc8d8e2, 70, 260);
+  env.petals = buildPetals(scene, D.petals[0], D.petals[1]);
+  env.mist = buildMist(scene, D.mist);
+  buildRain(scene, D.rain);
+  env.fog = new THREE.Fog(color(F.color), F.near, F.far);
   scene.fog = null;
+  env.fogEnabled = F.enabled;
 
   // hemisphere fill
-  env.hemi = new THREE.HemisphereLight(0xbfd4e8, 0x6b5a44, 1.0);
+  env.hemi = new THREE.HemisphereLight(color(L.hemi.sky), color(L.hemi.ground), L.hemi.intensity);
   scene.add(env.hemi);
 
   // ambient (goes blue/dark at night)
-  env.ambient = new THREE.AmbientLight(0x556270, 0.3);
+  env.ambient = new THREE.AmbientLight(color(L.ambient.color), L.ambient.intensity);
   scene.add(env.ambient);
 
   // key sun with shadows
-  const sun = new THREE.DirectionalLight(0xfff4dd, 2.6);
-  sun.position.set(40, 80, 30);
+  const sun = new THREE.DirectionalLight(color(L.sun.color), L.sun.intensity);
+  sun.position.set(...L.sun.position);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(L.sun.shadowMap, L.sun.shadowMap);
   const S = TOWN.half + 20;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 320;
   sun.shadow.camera.left = -S; sun.shadow.camera.right = S;
@@ -565,8 +559,8 @@ export function setupEnvironment(scene) {
   env.sun = sun; env.sunLight = sun;
 
   // rim/cool back light
-  env.rim = new THREE.DirectionalLight(0x9db8d6, 0.5);
-  env.rim.position.set(-40, 30, -50);
+  env.rim = new THREE.DirectionalLight(color(L.rim.color), L.rim.intensity);
+  env.rim.position.set(...L.rim.position);
   scene.add(env.rim);
 
   // night point lights near lanterns/lamps get created in buildWorld (pooled)
@@ -579,17 +573,21 @@ export function applyTime(key, instant = true) {
   _curPreset = p;
   const m = M();
 
+  const E = ENV_CFG;
+  const L = E.lights;
+  const W = E.weather.rain;
+  const night = p.nightAmount >= 1;
   env.sky.setColors(p.skyTop, p.skyBot, p.sunPos, p.sunColor,
-    key === 'night' ? 0.55 : 1.0, key === 'night');
+    night ? W.nightSkyScale : 1.0, night);
 
   const rainy = env.weather === 'rain';
   if (env.fog) {
-    env.fog.color.set(rainy ? 0x8d99a6 : p.fog);
-    env.fog.near = p.fogNear * (rainy ? 0.45 : 1);
-    env.fog.far = p.fogFar * (rainy ? 0.55 : 1);
+    env.fog.color.set(rainy ? color(W.fogColor) : p.fog);
+    env.fog.near = p.fogNear * (rainy ? W.fogNearScale : 1);
+    env.fog.far = p.fogFar * (rainy ? W.fogFarScale : 1);
   }
-  if (rainy && env.sun) { env.sun.intensity = p.sunInt * 0.55; }
-  else if (env.sun) { env.sun.intensity = p.sunInt; }
+  if (rainy && env.sun) env.sun.intensity = p.sunInt * W.sunScale;
+  else if (env.sun) env.sun.intensity = p.sunInt;
   env.scene.background = new THREE.Color(p.skyBot);
 
   env.hemi.color.set(p.hemiSky);
@@ -600,17 +598,17 @@ export function applyTime(key, instant = true) {
   env.ambient.intensity = p.ambientInt;
 
   env.sun.color.set(p.sunColor);
-  env.sun.intensity = p.sunInt;
   env.sun.position.set(...p.sunPos);
 
-  env.rim.intensity = 0.5 * (1 - p.nightAmount * 0.7);
+  env.rim.intensity = L.rim.intensity * (1 - p.nightAmount * L.rim.nightFade);
 
   // emissive materials respond to nightAmount
   const na = p.nightAmount;
-  m.windowLit.emissiveIntensity = 0.15 + na * 2.6;
-  m.windowLit.color.setHex(na > 0.5 ? 0x2a2016 : 0x3a3630);
-  m.lantern.emissiveIntensity = 0.2 + na * 2.6;
-  m.lampGlow.emissiveIntensity = 0.15 + na * 3.4;
+  const EM = E.emissive;
+  m.windowLit.emissiveIntensity = EM.windowLit.base + na * EM.windowLit.scale;
+  m.windowLit.color.setHex(color(na > 0.5 ? EM.windowLit.nightColor : EM.windowLit.dayColor));
+  m.lantern.emissiveIntensity = EM.lantern.base + na * EM.lantern.scale;
+  m.lampGlow.emissiveIntensity = EM.lampGlow.base + na * EM.lampGlow.scale;
 
   // night point lights
   for (const L of env.nightLights) L.intensity = na * L.userData.baseIntensity;
@@ -618,7 +616,7 @@ export function applyTime(key, instant = true) {
   // HDRI environment map (reflections + image based lighting)
   if (env.envMaps && env.envMaps[key] && env.scene) {
     env.scene.environment = env.envMaps[key];
-    const envInt = { morning: 0.12, noon: 0.1, afternoon: 0.14, night: 0.1 }[key] ?? 0.1;
+    const envInt = E.envMapIntensity[key] ?? 0.1;
     env.scene.traverse((object) => {
       const materials = Array.isArray(object.material) ? object.material : [object.material];
       for (const mat of materials) {
@@ -631,9 +629,9 @@ export function applyTime(key, instant = true) {
 
   // sky decor: stars at night, clouds by day
   if (env.skyDecor) {
-    env.skyDecor.starMat.opacity = Math.max(0, na * 1.2 - 0.15);
-    env.skyDecor.cloudMat.opacity = 0.5 * (1 - na);
-    env.skyDecor.clouds.visible = na < 0.85;
+    env.skyDecor.starMat.opacity = Math.max(0, na * E.stars.opacityScale + E.stars.opacityOffset);
+    env.skyDecor.cloudMat.opacity = E.clouds.opacity * (1 - na);
+    env.skyDecor.clouds.visible = na < E.clouds.visibleBelow;
   }
 
   return p.label;
@@ -713,49 +711,42 @@ export function buildWorld(scene, assets = null) {
 
   buildGround(world);
   buildRoads(world);
-  buildAnimatedPond(world, -26, 26, 8);
   buildPlotPad(world);
   // NOTE: the plaza well is replaced by a downloaded FBX well in placeAssets().
 
-  const m = M();
-
   // --- residential blocks: orient houses to face the main streets ---
-  // North block (rows facing +z toward road) and south (facing -z), east/west flanks.
+  // 布局规则由 town.config.json → buildings.grid / reserved 驱动
+  const grid = BUILD_CFG.grid;
   const houseDefs = [];
-  // four quadrants of houses; each block along a lane
-  const blockOffsets = [16, 28];      // distance from centre
-  const runs = [-34, -20, 20, 34];    // positions along x (N/S) and z (E/W)
-  let seed = 1;
+  const blockOffsets = grid.blockOffsets;      // distance from centre
+  const runs = grid.runs;                      // positions along x (N/S) and z (E/W)
+  let seed = grid.seed;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  const roofChoices = [m.roofBlue, m.roofBrown, m.roofGrey];
+  const range = ([lo, hi]) => lo + rnd() * (hi - lo);
+  const m = M();
+  const roofChoices = BUILD_CFG.roofMaterials.map(key => m[key]);
+  const wallChoices = BUILD_CFG.wallMaterials.map(key => m[key]);
 
   for (const off of blockOffsets) {
     for (const run of runs) {
       // north side (z negative), facing +z
-      let w = 5 + rnd() * 2.5, d = 5 + rnd() * 1.8, h = 4 + rnd() * 1.6;
-      houseDefs.push([run, -off, w, d, h, { rotY: 0, roofMat: roofChoices[Math.floor(rnd()*3)], wallMat: rnd()>0.5?m.plaster:m.plasterWarm }]);
+      let w = range(grid.size.w), d = range(grid.size.d), h = range(grid.size.h);
+      houseDefs.push([run, -off, w, d, h, { rotY: 0, roofMat: roofChoices[Math.floor(rnd()*roofChoices.length)], wallMat: wallChoices[rnd() > 0.5 ? 0 : 1] }]);
       // south side (z positive), facing -z
-      w = 5 + rnd() * 2.5; d = 5 + rnd() * 1.8; h = 4 + rnd() * 1.6;
-      houseDefs.push([run, off, w, d, h, { rotY: Math.PI, roofMat: roofChoices[Math.floor(rnd()*3)], wallMat: rnd()>0.5?m.plaster:m.plasterWarm }]);
+      w = range(grid.size.w); d = range(grid.size.d); h = range(grid.size.h);
+      houseDefs.push([run, off, w, d, h, { rotY: Math.PI, roofMat: roofChoices[Math.floor(rnd()*roofChoices.length)], wallMat: wallChoices[rnd() > 0.5 ? 0 : 1] }]);
     }
   }
   // east / west flank houses facing the E-W road
   for (const off of blockOffsets) {
     for (const run of runs) {
-      let w = 5 + rnd()*2, d = 5 + rnd()*1.5, h = 4 + rnd()*1.6;
-      houseDefs.push([off, run, w, d, h, { rotY: Math.PI/2, roofMat: roofChoices[Math.floor(rnd()*3)] }]);
-      w = 5 + rnd()*2; d = 5 + rnd()*1.5; h = 4 + rnd()*1.6;
-      houseDefs.push([-off, run, w, d, h, { rotY: -Math.PI/2, roofMat: roofChoices[Math.floor(rnd()*3)] }]);
+      let w = range(grid.flankSize.w), d = range(grid.flankSize.d), h = range(grid.flankSize.h);
+      houseDefs.push([off, run, w, d, h, { rotY: Math.PI/2, roofMat: roofChoices[Math.floor(rnd()*roofChoices.length)] }]);
+      w = range(grid.flankSize.w); d = range(grid.flankSize.d); h = range(grid.flankSize.h);
+      houseDefs.push([-off, run, w, d, h, { rotY: -Math.PI/2, roofMat: roofChoices[Math.floor(rnd()*roofChoices.length)] }]);
     }
   }
-  // Reserved scenic zones — no houses may spawn inside these.
-  const RESERVED = [
-    { x: -26, z: 26, r: 11 },   // pond
-    { x: -13, z: 20, r: 8.5 },  // pavilion
-    { x: -34, z: 18, r: 5 },    // rockery A
-    { x: -30, z: 30, r: 4 },    // rockery B
-    { x: 30, z: -34, r: 10 },   // walled garden
-  ];
+  const RESERVED = BUILD_CFG.reserved;
   const inReserved = (x, z) =>
     RESERVED.some(r => Math.hypot(x - r.x, z - r.z) < r.r) || inPlot(x, z, 3);
 
@@ -771,8 +762,8 @@ export function buildWorld(scene, assets = null) {
     const { hw, hd } = houseHalf(w, d, o.rotY || 0);
     let overlap = false;
     for (const p of placed) {
-      if (x - hw < p.maxX + 0.3 && x + hw > p.minX - 0.3 &&
-          z - hd < p.maxZ + 0.3 && z + hd > p.minZ - 0.3) { overlap = true; break; }
+      if (x - hw < p.maxX + grid.gap && x + hw > p.minX - grid.gap &&
+          z - hd < p.maxZ + grid.gap && z + hd > p.minZ - grid.gap) { overlap = true; break; }
     }
     if (overlap) continue;
     placed.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd });
@@ -780,138 +771,111 @@ export function buildWorld(scene, assets = null) {
   }
 
   // --- pavilion on the plaza east edge (two-tier) ---
-  const pav = buildHouse(world, 17, 0, 6.5, 6.5, 5.4, { roofMat: m.roofBlue, roofH: 2.2, name: 'pavilion', rotY: Math.PI });
-  const tier = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(3.6, 1.7, 3.6)), m.plaster);
-  tier.position.set(17, 5.4 + 0.85, 0); tier.castShadow = true; world.add(tier);
-  const tierRoof = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(3.8, 1.7, 4)), m.roofBlue);
-  tierRoof.position.set(17, 5.4 + 1.7 + 0.85, 0); tierRoof.rotation.y = Math.PI/4; tierRoof.castShadow = true; world.add(tierRoof);
+  const PV = BUILD_CFG.pavilion;
+  const pav = buildHouse(world, PV.x, PV.z, PV.w, PV.d, PV.h,
+    { roofMat: m.roofBlue, roofH: PV.roofH, name: 'pavilion', rotY: angle(PV.rotY) });
+  const tier = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(PV.tier.w, PV.tier.h, PV.tier.d)), m.plaster);
+  tier.position.set(PV.x, PV.h + PV.tier.h / 2, PV.z); tier.castShadow = true; world.add(tier);
+  const tierRoof = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(PV.tierRoof.r, PV.tierRoof.h, PV.tierRoof.segments)), m.roofBlue);
+  tierRoof.position.set(PV.x, PV.h + PV.tierRoof.h + PV.tier.h / 2, PV.z); tierRoof.rotation.y = Math.PI/4; tierRoof.castShadow = true; world.add(tierRoof);
 
   // --- boundary city walls, with gates where the main lanes meet them ---
-  const H = TOWN.half, wallH = 3.6, wallT = 1.4;
+  const H = TOWN.half;
+  const WC = BUILD_CFG.walls;
+  const wallH = WC.height, wallT = WC.thickness;
+  const outer = H / 2 + WC.offset;
+  const seg = H - WC.inset;
   // south (existing gate, rebuilt via the shared gate factory)
-  buildWall(world, -H/2 - 2.5, H, H - 5, wallT, wallH);
-  buildWall(world,  H/2 + 2.5, H, H - 5, wallT, wallH);
+  buildWall(world, -outer, H, seg, wallT, wallH);
+  buildWall(world, outer, H, seg, wallT, wallH);
   buildGate(world, 0, H, 0, -1);
   // north gate on the N-S lane
-  buildWall(world, -H/2 - 2.5, -H, H - 5, wallT, wallH);
-  buildWall(world,  H/2 + 2.5, -H, H - 5, wallT, wallH);
+  buildWall(world, -outer, -H, seg, wallT, wallH);
+  buildWall(world, outer, -H, seg, wallT, wallH);
   buildGate(world, 0, -H, 0, 1);
   // east / west gates on the E-W lane
-  buildWall(world, H, -H/2 - 2.5, wallT, H - 5, wallH);
-  buildWall(world, H,  H/2 + 2.5, wallT, H - 5, wallH);
+  buildWall(world, H, -outer, wallT, seg, wallH);
+  buildWall(world, H, outer, wallT, seg, wallH);
   buildGate(world, H, 0, -1, 0);
-  buildWall(world, -H, -H/2 - 2.5, wallT, H - 5, wallH);
-  buildWall(world, -H,  H/2 + 2.5, wallT, H - 5, wallH);
+  buildWall(world, -H, -outer, wallT, seg, wallH);
+  buildWall(world, -H, outer, wallT, seg, wallH);
   buildGate(world, -H, 0, 1, 0);
 
   // --- ladders (climb onto walls / pavilion) ---
-  buildLadder(world, 12, H - 0.9, 0, wallH, { x: 0, z: -1 });
-  buildLadder(world, -H + 0.9, 10, 0, wallH, { x: 1, z: 0 });
-  buildLadder(world, 17 + 3.5, 0, 0, 5.4, { x: 1, z: 0 });
+  const ladderTokens = { H: TOWN.half, PVX: PV.x };
+  BUILD_CFG.ladders.forEach(L => buildLadder(
+    world,
+    expr(L.x, ladderTokens), expr(L.z, ladderTokens),
+    L.baseY, L.topY, L.facing,
+  ));
 
   // --- trees scattered (avoid roads, plaza, pond, houses) ---
-  const treeSpots = [
-    [-34,12],[34,-12],[-12,34],[12,-34],[-40,-30],[40,30],[-20,20],[20,-20],
-    [-30,-14],[30,14],[-8,30],[8,-30],[-36,36],[36,-36],[-24,8],[24,-8],
-    [-16,24],[16,-24],[42,0],[-42,0],[0,40],[0,-40],[-30,40],[30,-40],
-  ];
-  treeSpots.forEach(([x,z], i) => {
-    if (Math.hypot(x + 26, z - 26) < 10) return; // pond
-    if (Math.abs(x) < 7 || Math.abs(z) < 7) return; // roads
-    if (Math.abs(Math.abs(x) - 10) < 4 && Math.abs(z) > 12) return; // shop rows
-    if (Math.hypot(x + 13, z - 20) < 8) return;   // pavilion
-    if (Math.hypot(x - 30, z + 34) < 10) return;  // garden
-    if (inPlot(x, z, 3)) return;                  // builder plot
-    buildTree(world, x, z, 0.85 + (i % 4) * 0.12);
+  const EX = SCENERY_CFG.exclusion;
+  const TS = SCENERY_CFG.treeScale;
+  const blockedTree = (x, z) =>
+    Math.hypot(x - EX.pond.x, z - EX.pond.z) < EX.pond.r ||
+    Math.abs(x) < EX.roadHalf || Math.abs(z) < EX.roadHalf ||
+    (Math.abs(Math.abs(x) - EX.shopRow.center) < EX.shopRow.band && Math.abs(z) > EX.shopRow.minZ) ||
+    Math.hypot(x - EX.pavilion.x, z - EX.pavilion.z) < EX.pavilion.r ||
+    Math.hypot(x - EX.garden.x, z - EX.garden.z) < EX.garden.r ||
+    inPlot(x, z, EX.plotPad);
+  SCENERY_CFG.treeSpots.forEach(([x, z], i) => {
+    if (blockedTree(x, z)) return;
+    buildTree(world, x, z, TS.base + (i % TS.cycle) * TS.step);
   });
 
   // --- street lamps along the lanes ---
-  const lampPositions = [
-    [6, 12], [-6, 12], [6, -12], [-6, -12],
-    [6, 24], [-6, 24], [6, -24], [-6, -24],
-    [12, 6], [-12, 6], [12, -6], [-12, -6],
-    [24, 6], [-24, 6], [24, -6], [-24, -6],
-  ];
-  lampPositions.forEach(([x,z]) => { if (!inPlot(x, z, 2)) buildLamp(world, x, z); });
+  SCENERY_CFG.lampPositions.forEach(([x, z]) => {
+    if (!inPlot(x, z, 2)) buildLamp(world, x, z);
+  });
 
   // --- pooled night point lights (a handful, positioned at key lamps) ---
-  const lightSpots = [[0,-1.5],[12,6],[-12,6],[12,-6],[-12,-6],[0,20],[0,-20],[0,34],[17,0]];
-  for (let i = 0; i < lightSpots.length; i++) {
-    const [x,z] = lightSpots[i];
-    const pl = new THREE.PointLight(0xffb060, 0, 30, 2.0);
-    pl.position.set(x, 3.4, z);
-    pl.userData.baseIntensity = 9 + (i % 3) * 2.5;
+  const NL = SCENERY_CFG.nightLights;
+  NL.spots.forEach(([x, z], i) => {
+    const pl = new THREE.PointLight(color(NL.color), 0, NL.distance, NL.decay);
+    pl.position.set(x, NL.height, z);
+    pl.userData.baseIntensity = NL.baseIntensity + (i % NL.intensityCycle) * NL.intensityStep;
     pl.castShadow = false;
     scene.add(pl);
     env.nightLights.push(pl);
-  }
+  });
 
   // --- placed third-party FBX assets (well, hero houses, windmill, trees...) ---
   if (assets) placeAssets(world, assets);
 
-  // --- RICH SCENERY: grass field, pavilion, rockery, garden, willows, flowers ---
+  // --- RICH SCENERY: 由 scenery.calls 声明式调度，新增景观只改 JSON ---
   buildGrassField(world);
 
-  // Scenic pavilion (亭) beside the pond, overlooking water
-  buildPavilion(world, -13, 20, 1.0);
-
-  // Rockery (假山) cluster near the pond's far side
-  buildRockery(world, -34, 18, 1.3);
-  buildRockery(world, -30, 30, 1.0);
-
-  // Walled flower garden to the north-east
-  buildGarden(world, 30, -34, 13);
-
-  // Willows lining the pond shore (微微垂柳)
-  buildWillow(world, -34, 26, 1.1);
-  buildWillow(world, -20, 14, 1.0);
-  buildWillow(world, -26, 36, 1.05);
-  buildWillow(world, -36, 34, 0.95);
-  buildWillow(world, 24, 33, 1.0);
-
-  // Flower clusters dotted around the town edges & near garden
-  buildFlowerBed(world, 24, -26, 3.0, 140);
-  buildFlowerBed(world, 38, -30, 2.5, 100, ['petalYellow','petalWhite','petalPink']);
-  buildFlowerBed(world, -20, 34, 2.2, 90, ['petalRed','petalPink']);
-  buildFlowerBed(world, 18, 30, 2.4, 100);
-  buildFlowerBed(world, 12, -30, 2.0, 80, ['petalYellow','petalWhite']);
-
-  // Scatter small wind-swayed bushes
-  const bushSpots = [[-12, 26],[10, 34],[-38, 8],[36, 8],[26, 20],[-24, -30],[30, -18],[-8, -34]];
-  bushSpots.forEach(([bx, bz], i) => {
-    if (Math.abs(bx) < 7 || Math.abs(bz) < 7) return;
-    if (inPlot(bx, bz, 2)) return; // builder plot
-    buildBush(world, bx, bz, 0.65 + (i % 3) * 0.18);
-  });
-
-  // --- pines, bamboo, waterfall, ceremonial props ---
-  buildPine(world, -36, 22, 1.0);
-  buildPine(world, -30, 38, 0.9);
-  buildPine(world, 26, -38, 1.0);
-  buildPine(world, 38, -24, 0.85);
-  buildPine(world, -40, -18, 1.05);
-  buildPine(world, 40, -2, 0.95);
-
-  buildBamboo(world, -37, 6, 11, 1.0);
-  buildBamboo(world, 36, 30, 9, 0.95);
-  buildBamboo(world, -20, -36, 8, 0.9);
-
-  // waterfall spilling off the rockery into a small basin
-  buildWaterfall(world, -30, 1.5, 31.6, 2.0, 3.4, 0);
-
-  // moored boat on the pond + lantern strings across the lanes + shop banners
-  buildBoat(world, -21.5, 21.5, -0.7, 1.0);
-  buildLanternString(world, -9, 10.5, 9, 10.5, 4.4, 9, 0.7);
-  buildLanternString(world, -9, -10.5, 9, -10.5, 4.4, 9, 0.7);
-  buildLanternString(world, 10.5, -9, 10.5, 9, 4.4, 9, 0.7);
-  buildBanner(world, 6.4, 6.2, '酒', -0.4);
-  buildBanner(world, -7.2, -6.4, '茶', 0.5);
-  buildBanner(world, 15.4, -3.2, '客栈', -1.2);
-
-  // plaza bronze ding + gate guardian lions
-  buildBronzeDing(world, 3.6, 4.2, 0.9);
-  buildStoneLion(world, -4.6, 43.2, 0.95, Math.PI);
-  buildStoneLion(world, 4.6, 43.2, 0.95, Math.PI);
+  const dispatch = {
+    pond: a => buildAnimatedPond(world, ...a),
+    pavilion: a => buildPavilion(world, ...a),
+    rockery: a => buildRockery(world, ...a),
+    garden: a => buildGarden(world, ...a),
+    willow: a => buildWillow(world, ...a),
+    flowerBed: a => buildFlowerBed(world, ...a),
+    bush: (list, spec) => {
+      if (!spec) return;
+      const [base, step, cycle] = spec;
+      list.forEach(([bx, bz], i) => {
+        if (Math.abs(bx) < EX.roadHalf || Math.abs(bz) < EX.roadHalf) return;
+        if (inPlot(bx, bz, 2)) return;
+        buildBush(world, bx, bz, base + (i % cycle) * step);
+      });
+    },
+    pine: a => buildPine(world, ...a),
+    bamboo: a => buildBamboo(world, ...a),
+    waterfall: a => buildWaterfall(world, ...a),
+    boat: a => buildBoat(world, ...a),
+    lanternString: a => buildLanternString(world, ...a),
+    banner: a => buildBanner(world, ...a),
+    bronzeDing: a => buildBronzeDing(world, ...a),
+    stoneLion: a => buildStoneLion(world, a[0], a[1], a[2], angle(a[3])),
+  };
+  for (const call of SCENERY_CFG.calls) {
+    const fn = dispatch[call.fn];
+    if (!fn) { console.warn(`[world] 未知景观构建器: ${call.fn}`); continue; }
+    fn(call.args, call.scale);
+  }
 
   // one-pass flush of all flower instances (few draw calls)
   flushFlowers(world);
@@ -943,23 +907,19 @@ function placeAssets(parent, assets) {
   }
 
   // 2) Hero buildings flanking the plaza — real textured houses
-  const heroHouses = [
-    ['house1', -8, -9, 0.35],
-    ['house2',  9, -9, -0.3],
-    ['building4', -9, 9, Math.PI + 0.2],
-    ['building2s', 9, 9, Math.PI - 0.25],
-  ];
-  for (const [kind, x, z, rotY] of heroHouses) {
-    if (!assets[kind]) continue;
-    const s = sz(kind);
-    const inst = instantiate(assets[kind], { x, z, rotY });
+  for (const h of BUILD_CFG.heroes) {
+    if (!assets[h.asset]) continue;
+    const s = sz(h.asset);
+    const rotY = angle(h.rotY);
+    const inst = instantiate(assets[h.asset], { x: h.x, z: h.z, rotY });
     parent.add(inst);
-    addPropCollider(x, z, Math.max(s.x, 3.2), Math.max(s.z, 3.2), s.y, 'house');
+    addPropCollider(h.x, h.z, Math.max(s.x, 3.2), Math.max(s.z, 3.2), s.y, 'house');
   }
 
+  const SH = BUILD_CFG.shopShell;
   SHOPS.forEach((shop, i) => {
-    buildHouse(parent, shop.x, shop.z, 4.8, 3.4, 8.4, {
-      rotY: shop.rotY, name: 'shop', stories: 3, roofH: 1.8,
+    buildHouse(parent, shop.x, shop.z, SH.w, SH.d, SH.h, {
+      rotY: shop.rotY, name: 'shop', stories: SH.stories, roofH: SH.roofH,
       roofMat: i % 3 === 0 ? m.roofBrown : m.roofBlue,
       wallMat: i % 2 === 0 ? m.plasterWarm : m.plaster,
     });
@@ -967,16 +927,11 @@ function placeAssets(parent, assets) {
   buildCommerce(parent, colliders, buildBanner);
 
   // 3) Windmill + barn + chicken coop in the outskirts (characterful silhouettes)
-  const farms = [
-    ['windmill', -38, -8, 0.6, 9.0],
-    ['barn', 39, 16, -0.4, 4.5],
-    ['coop', 40, 30, 0.8, 2.0],
-  ];
-  for (const [kind, x, z, rotY, top] of farms) {
-    if (!assets[kind]) continue;
-    const s = sz(kind);
-    parent.add(instantiate(assets[kind], { x, z, rotY }));
-    addPropCollider(x, z, Math.max(s.x, 2.5), Math.max(s.z, 2.5), top, kind === 'windmill' ? 'tower' : 'house');
+  for (const f of BUILD_CFG.farms) {
+    if (!assets[f.asset]) continue;
+    const s = sz(f.asset);
+    parent.add(instantiate(assets[f.asset], { x: f.x, z: f.z, rotY: angle(f.rotY) }));
+    addPropCollider(f.x, f.z, Math.max(s.x, 2.5), Math.max(s.z, 2.5), f.colliderTop, f.kind);
   }
 
   // 4) (FBX nature pack relies on external textures that FBX doesn't embed —

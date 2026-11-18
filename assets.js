@@ -4,6 +4,9 @@
 // ============================================================================
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import { CONFIG, angle } from './config.js';
+
+const ASSET_CFG = CONFIG.assets;
 
 const loader = new FBXLoader();
 const cache = new Map();     // url -> THREE.Group (original)
@@ -132,38 +135,25 @@ export function loadFBX(url, { targetHeight = null, targetFootprint = null, face
   });
 }
 
-export const MODEL_SPECS = {
-  house1:      { file: 'House1.fbx', targetHeight: 4.6 },
-  house2:      { file: 'House2.fbx', targetHeight: 5.0 },
-  building4:   { file: 'Building4.fbx', targetHeight: 10.2, targetFootprint: 5.2 },
-  building2s:  { file: 'Building2_Small.fbx', targetHeight: 4.2, targetFootprint: 4.8 },
-  well:        { file: 'Well.fbx', targetHeight: 1.25 },
-  windmill:    { file: 'Windmill.fbx', targetHeight: 8.0 },
-  barn:        { file: 'Barn.fbx', targetHeight: 4.8 },
-  coop:        { file: 'ChickenCoop.fbx', targetHeight: 1.6 },
-  cow:         { file: 'Cow.fbx', targetHeight: 1.45, charFacePlusX: true, fixFeetRig: true },
-  horse:       { file: 'Horse.fbx', targetHeight: 1.9, charFacePlusX: true, fixFeetRig: true },
-  sheep:       { file: 'Sheep.fbx', targetHeight: 0.85, charFacePlusX: true, fixFeetRig: true },
-  pig:         { file: 'Pig.fbx', targetHeight: 0.65, charFacePlusX: true, fixFeetRig: true },
-  pug:         { file: 'Pug.fbx', targetHeight: 0.35, charFacePlusX: true, fixFeetRig: true },
-  fox:         { file: 'animal_fox.fbx', targetHeight: 0.5, charFacePlusX: true, modelYaw: Math.PI, fixFeetRig: true },
-  bird:        { file: 'animal_bird.fbx', targetHeight: 0.3, charFacePlusX: true },
-  manA:        { file: 'char_male_casual.fbx', targetHeight: 1.75, charFacePlusX: true, fixFeetRig: true },
-  manB:        { file: 'char_male_longsleeve.fbx', targetHeight: 1.75, feetScale: 0.8, charFacePlusX: true, fixFeetRig: true },
-  woman:       { file: 'char_female_casual.fbx', targetHeight: 1.68, feetScale: 0.8, charFacePlusX: true, fixFeetRig: true },
-};
+// 从配置派生模型规格；角度 token 一次性转弧度。导出符号保持不变。
+export const MODEL_SPECS = Object.fromEntries(
+  Object.entries(ASSET_CFG.models).map(([key, spec]) => [key, {
+    ...spec,
+    ...(spec.modelYaw !== undefined ? { modelYaw: angle(spec.modelYaw) } : {}),
+  }]),
+);
 
 // Public preload of everything used, returns a dict of template clones.
 // Templates keep their AnimationClips on template.userData.animations.
 export async function preloadAssets(onProgress) {
-  const base = './assets/models/';
+  const base = ASSET_CFG.base;
   const spec = MODEL_SPECS;
 
   const keys = Object.keys(spec);
   const out = {};
   let done = 0;
   // limited concurrency (avoids connection resets on simple static servers)
-  const CONCURRENCY = 3;
+  const CONCURRENCY = ASSET_CFG.concurrency;
   let cursor = 0;
   async function worker() {
     while (cursor < keys.length) {

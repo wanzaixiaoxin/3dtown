@@ -3,9 +3,13 @@
 //  Wandering AI on the ground; animations driven by AnimationMixer.
 // ============================================================================
 import * as THREE from 'three';
+import { CONFIG } from './config.js';
 import { instantiate, playClip, mixers } from './assets.js';
 import { TOWN, colliders } from './world.js';
 import { SHOPS } from './commerce.js';
+
+const NPC_CFG = CONFIG.npcs;
+const VILLAGER_CFG = NPC_CFG.villagers;
 
 export const npcs = [];
 let scene = null;
@@ -16,18 +20,12 @@ const contactShadowMaterial = new THREE.MeshBasicMaterial({
 });
 const VISIT_POINTS = [
   ...SHOPS.map(shop => ({ id: shop.id, customer: shop.customer, keeper: shop.keeper, sign: shop.sign })),
-  { id: 'well', customer: { x: 0, z: 2.2 }, keeper: { x: 0, z: -1.5 }, sign: '取水' },
-  { id: 'pavilion', customer: { x: -9.5, z: 17 }, keeper: { x: -13, z: 20 }, sign: '观景' },
+  ...NPC_CFG.visitPoints,
 ];
 
 // The four town gates (matching the buildGate calls in world.js). Travelers
 // spawn outside one and walk in through it, visit shops, then head back out.
-const GATES = [
-  { x: 0, z: 44.5 },    // south
-  { x: 0, z: -44.5 },   // north
-  { x: 44.5, z: 0 },    // east
-  { x: -44.5, z: 0 },   // west
-];
+const GATES = NPC_CFG.gates;
 
 function clampTown(x, z) {
   const lim = TOWN.half - 3;
@@ -188,19 +186,20 @@ export function spawnNPCs(s, assets) {
   scene = s;
   if (!assets) return npcs;
 
-  const villagerKinds = ['manA', 'woman', 'manB', 'manA', 'woman', 'manB', 'manA', 'woman', 'manB', 'manA', 'woman', 'manB'];
-  for (let i = 0; i < 18; i++) {
+  const villagerKinds = VILLAGER_CFG.kinds;
+  const SP = VILLAGER_CFG.speed;
+  for (let i = 0; i < VILLAGER_CFG.count; i++) {
     const kind = villagerKinds[i % villagerKinds.length];
-    const keeper = i < 6;
-    const traveler = i >= 14;
+    const keeper = i < VILLAGER_CFG.keeperCount;
+    const traveler = i >= VILLAGER_CFG.travelerFrom;
     const role = keeper ? 'keeper' : traveler ? 'traveler' : 'visitor';
-    const shop = SHOPS[(i * 3) % SHOPS.length];
+    const shop = SHOPS[(i * VILLAGER_CFG.routeStep) % SHOPS.length];
     let spot = keeper ? SHOPS[(i * 2) % SHOPS.length].keeper : shop.customer;
     let itinerary = null;
     if (traveler) {
       // enter from a random gate, visit a shop, then walk back out the same gate
       const gate = GATES[i % GATES.length];
-      const inward = 3.5;   // first waypoint just inside the gate
+      const inward = VILLAGER_CFG.gateInward;
       const dirLen = Math.hypot(gate.x, gate.z);
       const inX2 = gate.x - (gate.x / dirLen) * inward;
       const inZ2 = gate.z - (gate.z / dirLen) * inward;
@@ -216,45 +215,40 @@ export function spawnNPCs(s, assets) {
     if (!inst) continue;
     addNPC(inst, {
       type: 'villager', x, z,
-      speed: keeper ? 0 : (0.7 + (i % 5) * 0.09) * (traveler ? 1.1 : 1),
-      radius: 4,
+      speed: keeper ? 0 : (SP.base + (i % SP.cycle) * SP.step) * (traveler ? SP.travelerScale : 1),
+      radius: VILLAGER_CFG.radius,
       role,
-      routeIndex: (i * 3) % SHOPS.length,
+      routeIndex: (i * VILLAGER_CFG.routeStep) % SHOPS.length,
       itinerary,
       variant: i + 1,
       faceYaw: keeper ? (SHOPS[(i * 2) % SHOPS.length].side < 0 ? Math.PI / 2 : -Math.PI / 2) : undefined,
-      walkClip: 'Walk', idleClip: 'Idle',
+      walkClip: VILLAGER_CFG.walkClip, idleClip: VILLAGER_CFG.idleClip,
     });
   }
 
   // Farm animals — cows, sheep, pigs (animated Walk/Idle)
-  const animalSpots = [
-    ['cow', 20, -20], ['cow', -20, -20], ['sheep', 14, -22], ['sheep', -14, -22],
-    ['pig', 22, 8], ['pig', -22, 10], ['sheep', 18, 20], ['cow', -18, 18],
-  ];
-  animalSpots.forEach(([kind, ox, oz]) => {
+  NPC_CFG.animals.forEach(({ kind, x: ox, z: oz }) => {
     const [x, z] = freeSpot(ox, oz);
     const inst = instantiate(assets[kind], { x, z, rotY: Math.random() * Math.PI * 2 });
     if (!inst) return;
     addNPC(inst, {
       type: 'animal', x, z,
-      speed: 0.45 + Math.random() * 0.2,
-      radius: 5 + Math.random() * 4,
-      walkClip: 'Walk', idleClip: 'Idle',
+      speed: NPC_CFG.animalSpeed.base + Math.random() * NPC_CFG.animalSpeed.range,
+      radius: NPC_CFG.animalRadius.base + Math.random() * NPC_CFG.animalRadius.range,
+      walkClip: VILLAGER_CFG.walkClip, idleClip: VILLAGER_CFG.idleClip,
     });
   });
 
   // Dogs (pug) + fox — quicker wanderers
-  const smallSpots = [['pug', 6, 10], ['pug', -10, 6], ['fox', 24, -6], ['fox', -24, -10]];
-  smallSpots.forEach(([kind, ox, oz]) => {
+  NPC_CFG.smalls.forEach(({ kind, x: ox, z: oz }) => {
     const [x, z] = freeSpot(ox, oz);
     const inst = instantiate(assets[kind], { x, z });
     if (!inst) return;
     addNPC(inst, {
       type: 'animal', x, z,
-      speed: 0.5 + Math.random() * 0.25,
-      radius: 7 + Math.random() * 5,
-      walkClip: 'Walk', idleClip: 'Idle',
+      speed: NPC_CFG.smallSpeed.base + Math.random() * NPC_CFG.smallSpeed.range,
+      radius: NPC_CFG.smallRadius.base + Math.random() * NPC_CFG.smallRadius.range,
+      walkClip: VILLAGER_CFG.walkClip, idleClip: VILLAGER_CFG.idleClip,
     });
   });
 
