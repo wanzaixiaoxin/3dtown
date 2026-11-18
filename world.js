@@ -312,6 +312,38 @@ function buildWall(parent, x, z, w, d, h) {
 }
 
 // ---------------------------------------------------------------------------
+//  GATE — twin towers + red lintel + gold plaque at a wall/lane crossing.
+//  (cx,cz) is the gate centre on the wall line; (dirX,dirZ) is the unit
+//  normal pointing INTO the town (plaque side). The 10m wall gap must
+//  already be left by the caller (matching the 9m lane below the lintel).
+// ---------------------------------------------------------------------------
+function buildGate(parent, cx, cz, dirX, dirZ) {
+  const m = M();
+  const alongX = dirZ !== 0;            // gate spans the x axis (N/S gates)
+  // twin towers flanking the 10m gap, 3.6m out from centre on each side
+  const t1x = alongX ? cx - 3.6 : cx;
+  const t1z = alongX ? cz : cz - 3.6;
+  const t2x = alongX ? cx + 3.6 : cx;
+  const t2z = alongX ? cz : cz + 3.6;
+  const towerOpts = { roofMat: m.roofBrown, lanterns: false, wallMat: m.stoneLt };
+  buildHouse(parent, t1x, t1z, 2.6, 2.6, 4.6, towerOpts);
+  buildHouse(parent, t2x, t2z, 2.6, 2.6, 4.6, towerOpts);
+  // red lintel bridging the towers (7.4m span across the gap)
+  const lintelW = alongX ? 7.4 : 1.8;
+  const lintelD = alongX ? 1.8 : 7.4;
+  const lintel = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(lintelW, 0.7, lintelD)), m.woodRed);
+  lintel.position.set(cx, 3.7, cz);
+  lintel.castShadow = true;
+  parent.add(lintel);
+  // gold plaque facing into the town
+  const plaqueW = alongX ? 2.6 : 0.15;
+  const plaqueD = alongX ? 0.15 : 2.6;
+  const plaque = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(plaqueW, 0.9, plaqueD)), m.gold);
+  plaque.position.set(cx + dirX * 0.95, 3.75, cz + dirZ * 0.95);
+  parent.add(plaque);
+}
+
+// ---------------------------------------------------------------------------
 //  LADDER — leans on a wall face; grounded at baseY
 // ---------------------------------------------------------------------------
 function buildLadder(parent, x, z, baseY, topY, facing) {
@@ -754,20 +786,23 @@ export function buildWorld(scene, assets = null) {
   const tierRoof = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(3.8, 1.7, 4)), m.roofBlue);
   tierRoof.position.set(17, 5.4 + 1.7 + 0.85, 0); tierRoof.rotation.y = Math.PI/4; tierRoof.castShadow = true; world.add(tierRoof);
 
-  // --- boundary city walls with a south gate ---
+  // --- boundary city walls, with gates where the main lanes meet them ---
   const H = TOWN.half, wallH = 3.6, wallT = 1.4;
+  // south (existing gate, rebuilt via the shared gate factory)
   buildWall(world, -H/2 - 2.5, H, H - 5, wallT, wallH);
   buildWall(world,  H/2 + 2.5, H, H - 5, wallT, wallH);
-  buildWall(world, 0, -H, H * 2, wallT, wallH);
-  buildWall(world, H, 0, wallT, H * 2, wallH);
-  buildWall(world, -H, 0, wallT, H * 2, wallH);
-  // gate towers + lintel
-  buildHouse(world, -3.6, H, 2.6, 2.6, 4.6, { roofMat: m.roofBrown, lanterns: false, wallMat: m.stoneLt });
-  buildHouse(world,  3.6, H, 2.6, 2.6, 4.6, { roofMat: m.roofBrown, lanterns: false, wallMat: m.stoneLt });
-  const lintel = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(7.4, 0.7, 1.8)), m.woodRed);
-  lintel.position.set(0, 3.7, H); lintel.castShadow = true; world.add(lintel);
-  const plaque = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(2.6, 0.9, 0.15)), m.gold);
-  plaque.position.set(0, 3.75, H - 0.95); world.add(plaque);
+  buildGate(world, 0, H, 0, -1);
+  // north gate on the N-S lane
+  buildWall(world, -H/2 - 2.5, -H, H - 5, wallT, wallH);
+  buildWall(world,  H/2 + 2.5, -H, H - 5, wallT, wallH);
+  buildGate(world, 0, -H, 0, 1);
+  // east / west gates on the E-W lane
+  buildWall(world, H, -H/2 - 2.5, wallT, H - 5, wallH);
+  buildWall(world, H,  H/2 + 2.5, wallT, H - 5, wallH);
+  buildGate(world, H, 0, -1, 0);
+  buildWall(world, -H, -H/2 - 2.5, wallT, H - 5, wallH);
+  buildWall(world, -H,  H/2 + 2.5, wallT, H - 5, wallH);
+  buildGate(world, -H, 0, 1, 0);
 
   // --- ladders (climb onto walls / pavilion) ---
   buildLadder(world, 12, H - 0.9, 0, wallH, { x: 0, z: -1 });

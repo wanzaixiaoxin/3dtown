@@ -649,8 +649,14 @@ function drawMinimap() {
     const w = (c.maxX - c.minX) * scale, h = (c.maxZ - c.minZ) * scale;
     mmCtx.fillRect(toX(c.minX), toY(c.minZ), w, h);
   }
-  // walls
-  mmCtx.strokeStyle = '#a89a86'; mmCtx.lineWidth = 2; mmCtx.strokeRect(toX(-TOWN.half), toY(-TOWN.half), TOWN.half*2*scale, TOWN.half*2*scale);
+  // walls — four sides, each split into two segments leaving the gate gap
+  mmCtx.strokeStyle = '#a89a86'; mmCtx.lineWidth = 2;
+  const Hm = TOWN.half, g = 5;   // gate half-width (10m gap centred on lanes)
+  const seg = (x1, z1, x2, z2) => { mmCtx.beginPath(); mmCtx.moveTo(toX(x1), toY(z1)); mmCtx.lineTo(toX(x2), toY(z2)); mmCtx.stroke(); };
+  seg(-Hm, Hm, -g, Hm); seg(g, Hm, Hm, Hm);           // south (gate at z=H)
+  seg(-Hm, -Hm, -g, -Hm); seg(g, -Hm, Hm, -Hm);       // north
+  seg(Hm, -Hm, Hm, -g); seg(Hm, g, Hm, Hm);           // east
+  seg(-Hm, -Hm, -Hm, -g); seg(-Hm, g, -Hm, Hm);       // west
 
   // NPCs
   for (const n of npcs) {

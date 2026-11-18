@@ -20,6 +20,15 @@ const VISIT_POINTS = [
   { id: 'pavilion', customer: { x: -9.5, z: 17 }, keeper: { x: -13, z: 20 }, sign: '观景' },
 ];
 
+// The four town gates (matching the buildGate calls in world.js). Travelers
+// spawn outside one and walk in through it, visit shops, then head back out.
+const GATES = [
+  { x: 0, z: 44.5 },    // south
+  { x: 0, z: -44.5 },   // north
+  { x: 44.5, z: 0 },    // east
+  { x: -44.5, z: 0 },   // west
+];
+
 function clampTown(x, z) {
   const lim = TOWN.half - 3;
   return [Math.max(-lim, Math.min(lim, x)), Math.max(-lim, Math.min(lim, z))];
@@ -189,13 +198,17 @@ export function spawnNPCs(s, assets) {
     let spot = keeper ? SHOPS[(i * 2) % SHOPS.length].keeper : shop.customer;
     let itinerary = null;
     if (traveler) {
-      const gateX = i % 2 === 0 ? -1.5 : 1.5;
-      spot = { x: gateX, z: 39.5 + (i - 14) * 0.65 };
+      // enter from a random gate, visit a shop, then walk back out the same gate
+      const gate = GATES[i % GATES.length];
+      const inward = 3.5;   // first waypoint just inside the gate
+      const dirLen = Math.hypot(gate.x, gate.z);
+      const inX2 = gate.x - (gate.x / dirLen) * inward;
+      const inZ2 = gate.z - (gate.z / dirLen) * inward;
+      spot = { x: gate.x, z: gate.z };
       itinerary = [
-        { x: gateX, z: 38 },
-        { x: gateX * 0.7, z: 24 },
+        { x: inX2, z: inZ2 },
         { x: shop.customer.x, z: shop.customer.z, shopId: shop.id },
-        { x: gateX, z: 41 },
+        { x: gate.x, z: gate.z },
       ];
     }
     const [x, z] = freeSpot(spot.x, spot.z);
