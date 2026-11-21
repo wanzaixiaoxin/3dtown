@@ -412,6 +412,11 @@ export function createGaitState(instance, type) {
   }
   state.walkPhase = Math.random() * Math.PI * 2;
   state.walkBlend = 0;
+  // 个体差异：每个 NPC 有稳定的步频/步幅系数，避免所有人同一节拍齐步走。
+  // speed 只有少数离散档位，仅靠它区分步频会让多人节奏雷同；这里追加连续随机。
+  // 绑在 gaitState 上，流动人口回收复用时不会重置，个体节奏保持稳定。
+  state.gaitRate = 1 + (Math.random() * 2 - 1) * 0.22;
+  state.strideScale = 1 + (Math.random() * 2 - 1) * 0.12;
   instance.updateMatrixWorld(true);
   if (type === 'villager') {
     for (const [name, direction] of [['FootL', -1], ['FootR', 1]]) {
@@ -874,10 +879,11 @@ function applyHumanGait(n, dt, w, speed) {
   }
   n.group.updateMatrixWorld(true);
 
-  n.walkPhase += dt * (P.freqBase + speed * P.freqSpeed);
+  // 个体步频系数打散节奏：speed 档位离散，叠加每人稳定的 gaitRate 后才不会齐步走。
+  n.walkPhase += dt * (P.freqBase + speed * P.freqSpeed) * (n.gaitRate ?? 1);
   const ph = n.walkPhase;
   const c = Math.cos(ph), s = Math.sin(ph);
-  const stride = P.stride * w;
+  const stride = P.stride * w * (n.strideScale ?? 1);
 
   // 大腿：左右腿反相前后摆（绕世界 X 轴，负角向前）。
   // 小腿：只在摆动腿离地阶段弯曲（swing 区间为 cos 从 -1 回到 +1），支撑腿接近伸直。
