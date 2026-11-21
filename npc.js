@@ -1062,30 +1062,157 @@ function interactionClip(n) {
   return n.variant % 3 === 0 ? 'Clapping' : 'Standing';
 }
 
+// 店员（老板/伙计）行为参数，集中在 keeperAct 便于浏览器里逐帧对照调参。
+// 状态链：张望 → 招呼路人 → 介绍商品 → 送客 → 张望，间或主动吆喝招徕。
+export const keeperAct = {
+  greetD: 5.2,        // 中距离路人：招手打招呼(m)
+  guestD: 2.9,        // 近距离客人：介绍商品(m)
+  hawkGap: 9,         // 吆喝最小间隔(s)
+  greetDur: 2.0,
+  presentDur: 2.8,
+  farewellDur: 2.0,
+  hawkDur: 2.6,
+  reach: 1.2,         // 手臂朝身前上方抬起角(side 负角,rad)
+  spread: 1.2,        // 手臂向头侧展开角(side 负角,rad)
+  waveAmp: 0.4,       // 挥手摆幅(rad)
+  waveFreq: 8.5,      // 挥手频率(rad/s)
+  fade: 4,            // 手势淡入淡出速率
+};
+
+// 面向街道的固定朝向（店员初始 yaw），只记一次。
+function keeperFacing(n) {
+  if (n.keeperFacing === undefined) n.keeperFacing = n.yaw;
+  return n.keeperFacing;
+}
+
 function updateKeeper(n, dt) {
+  const A = keeperAct;
   n.vel.set(0, 0, 0);
-  n.group.position.x = n.pos.x;
-  n.group.position.z = n.pos.z;
-  n.gestureT -= dt;
-  let guest = null, best = 2.8;
-  for (const other of npcs) {
-    if (other === n || (other.role !== 'visitor' && other.role !== 'traveler')) continue;
-    const d = Math.hypot(other.pos.x - n.pos.x, other.pos.z - n.pos.z);
-    if (d < best) { best = d; guest = other; }
+  let near = null, nearD = Infinity;
+  for (const o of npcs) {
+    if (o === n || (o.role !== 'visitor' && o.role !== 'traveler') || !o.group.visible) continue;
+    // 跳过坐标异常的行人：一旦把 NaN 坐标喂给 facePoint/侧移，店员朝向和位置会被污染成 NaN
+    if (!Number.isFinite(o.pos.x) || !Number.isFinite(o.pos.z)) continue;
+    const d = Math.hypot(o.pos.x - n.pos.x, o.pos.z - n.pos.z);
+    if (d < nearD) { nearD = d; near = o; }
   }
-  if (guest && n.gestureT <= 0) {
-    n.interactionT = 1.8 + (n.variant % 3) * 0.6;
-    n.gestureT = 5 + Math.random() * 4;
+
+  n.kgCool = Math.max(0, (n.kgCool ?? A.hawkGap * 0.5) - dt);
+  n.kgT = Math.max(0, (n.kgT ?? 0) - dt);
+  n.kgAnimT = (n.kgAnimT || 0) + dt;
+  const st = n.kgState || 'look';
+  let next = st;
+
+  // 客人走远后解除「已介绍」标记，允许下一位客人触发介绍
+  if (nearD > A.guestD + 1.2) n.kgServed = null;
+
+  if (n.kgPrevNear && nearD > A.guestD + 1.2 && st === 'present') {
+    next = 'farewell';                       // 客人转身离开 → 送客
+  } else if (near && nearD < A.guestD && near !== n.kgServed &&
+             (st === 'look' || st === 'hawk' || st === 'greet')) {
+    next = 'present';                        // 客人到店门口 → 介绍商品
+  } else if (near && nearD >= A.guestD && nearD < A.greetD && st === 'look' && n.kgCool <= 0) {
+    next = 'greet';                          // 路人经过 → 招手招呼
+  } else if (st === 'look' && n.kgCool <= 0) {
+    next = 'hawk';                           // 无人时主动吆喝招徕
   }
-  n.interactionT = Math.max(0, n.interactionT - dt);
-  if (n.interactionT > 0 && guest) {
-    facePoint(n, guest.pos.x, guest.pos.z, dt);
-    switchClip(n, interactionClip(n), 0.9);
-  } else {
-    facePoint(n, n.pos.x + Math.sin(n.yaw), n.pos.z + Math.cos(n.yaw), dt);
-    switchClip(n, n.idleClip, 0.9);
+  n.kgPrevNear = !!(near && nearD < A.guestD);
+
+  if (next !== st) {
+    n.kgState = next;
+    n.kgT = next === 'present' ? A.presentDur : next === 'hawk' ? A.hawkDur
+      : next === 'greet' ? A.greetDur : next === 'farewell' ? A.farewellDur : 0;
+    if (next === 'hawk' || next === 'greet') n.kgCool = A.hawkGap * (0.6 + Math.random() * 0.5);
+    if (next === 'present') n.kgServed = near;
+    if (near) n.kgLastTarget = { x: near.pos.x, z: near.pos.z };
   }
+  if (n.kgState !== 'look' && n.kgT <= 0) { n.kgState = 'look'; n.kgTarget = null; }
+
+  // 手势淡入淡出：进入动作渐升到 1，回到张望渐降到 0，避免姿态瞬跳
+  const wantB = n.kgState === 'look' ? 0 : 1;
+  n.kgBlend = (n.kgBlend ?? 0) + (wantB - (n.kgBlend ?? 0)) * Math.min(1, dt * A.fade);
+
+  // 迎客/送客时朝目标，其余时间朝街张望。goal 统一为 {x,z} 坐标而非 NPC 对象
+  const goal = (n.kgState === 'greet' || n.kgState === 'present' || n.kgState === 'farewell')
+    ? (near ? near.pos : n.kgLastTarget) : null;
+  if (goal) facePoint(n, goal.x, goal.z, dt, 2.2);
+  else {
+    const f = keeperFacing(n);
+    facePoint(n, n.pos.x + Math.sin(f) * 10, n.pos.z + Math.cos(f) * 10, dt, 1.6);
+  }
+
+  // 迎客时向客人侧移半步，送客后归位（只动 group，不改 n.pos，避免影响寻路）
+  let ox = 0, oz = 0;
+  if (goal && (n.kgState === 'present' || n.kgState === 'greet')) {
+    const dx = goal.x - n.pos.x, dz = goal.z - n.pos.z, d = Math.hypot(dx, dz) || 1;
+    const step = n.kgState === 'present' ? 0.35 : 0.15;
+    ox = dx / d * step; oz = dz / d * step;
+  }
+  n.kgOffX = (n.kgOffX ?? 0) + (ox - (n.kgOffX ?? 0)) * Math.min(1, dt * 2.5);
+  n.kgOffZ = (n.kgOffZ ?? 0) + (oz - (n.kgOffZ ?? 0)) * Math.min(1, dt * 2.5);
+  n.group.position.x = n.pos.x + n.kgOffX;
+  n.group.position.z = n.pos.z + n.kgOffZ;
+
+  switchClip(n, n.idleClip, 0.9, dt);
   applyGait(n, dt, false, 0);
+  applyKeeperPose(n, dt);
+}
+
+// 在 applyGait 采样完 idle/动画姿态之后叠加店员手势，每个 keeper 每帧从干净姿态重建。
+export function applyKeeperPose(n, dt) {
+  const A = keeperAct;
+  const t = n.kgAnimT || 0;
+  const b = n.kgBlend ?? 0;
+  const st = n.kgState || 'look';
+  // 张望：头部缓慢左右扫视（常驻轻微，有手势时减弱）
+  rotateBone(n, 'Head', WORLD_UP, Math.sin(t * 0.6 + (n.variant || 0)) * 0.28 * (1 - b * 0.7));
+  if (b < 0.01) return;
+  const wave = Math.sin(t * A.waveFreq);
+  const refresh = name => { if (n.bones[name]) n.bones[name].updateWorldMatrix(true, false); };
+  if (st === 'hawk') {
+    // 吆喝招徕：右臂抬到身前上方、前臂弯起，手臂带喊话抖动，头微仰（朝街面招呼）
+    // 实测该模型：WORLD_SIDE 负角=手臂朝身前上方抬起，LowerArm 同向负角=前臂弯起
+    rotateBone(n, 'UpperArmR', WORLD_SIDE, -(A.reach * 0.78 + wave * 0.08) * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'UpperArmR', WORLD_FORWARD, -0.25 * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'LowerArmR', WORLD_SIDE, -1.15 * b);
+    refresh('PalmR');
+    rotateBone(n, 'PalmR', WORLD_FORWARD, -0.5 * b);
+    rotateBone(n, 'Head', WORLD_SIDE, 0.16 * b);        // 仰头喊话
+  } else if (st === 'greet') {
+    // 挥手招呼路人：右臂侧展抬到头侧、前臂上弯，手掌左右摆动
+    rotateBone(n, 'UpperArmR', WORLD_SIDE, -A.spread * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'UpperArmR', WORLD_FORWARD, -0.2 * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'LowerArmR', WORLD_SIDE, -1.4 * b);
+    refresh('PalmR');
+    rotateBone(n, 'PalmR', WORLD_UP, wave * A.waveAmp * b);
+  } else if (st === 'present') {
+    // 介绍商品：右臂抬到身前、掌心摊开向上做「请」的手势，头在客人与货物间来回
+    rotateBone(n, 'UpperArmR', WORLD_SIDE, -A.reach * 0.62 * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'UpperArmR', WORLD_FORWARD, -0.35 * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'LowerArmR', WORLD_SIDE, -1.0 * b);
+    refresh('PalmR');
+    rotateBone(n, 'PalmR', WORLD_FORWARD, -1.1 * b);    // 掌心向上摊开
+    rotateBone(n, 'PalmR', WORLD_SIDE, 0.35 * b);
+    rotateBone(n, 'Head', WORLD_UP, Math.sin(t * 2.6) * 0.3 * b);
+    rotateBone(n, 'Torso', WORLD_SIDE, -0.08 * b);
+  } else if (st === 'farewell') {
+    // 送客：抬手挥别 + 欠身
+    rotateBone(n, 'UpperArmR', WORLD_SIDE, -A.spread * 0.85 * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'UpperArmR', WORLD_FORWARD, -0.18 * b);
+    refresh('UpperArmR');
+    rotateBone(n, 'LowerArmR', WORLD_SIDE, -1.3 * b);
+    refresh('PalmR');
+    rotateBone(n, 'PalmR', WORLD_UP, wave * A.waveAmp * 0.7 * b);
+    rotateBone(n, 'Torso', WORLD_SIDE, -0.2 * b);       // 欠身
+    rotateBone(n, 'Head', WORLD_SIDE, -0.1 * b);
+  }
 }
 
 function updateInteraction(n, dt) {
