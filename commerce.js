@@ -229,7 +229,7 @@ export function buildCommerce(parent, colliders, buildBanner) {
 
   // 店铺门前的外摆摊：业态、配色、商品、字号全部跟随最近的店铺，
   // 让摊子和店铺一眼就能看出是同一家，而不是各自孤立的木架。
-  const stallSpots = [[-5.65, -28], [5.65, -21.5], [-5.65, -15], [5.65, 15], [-5.65, 28], [5.65, 34]];
+  const stallSpots = [[-5.65, -54], [5.65, -46], [-5.65, -18], [5.65, 18], [-5.65, 46], [5.65, 54]];
   const nearestShop = (x, z) => SHOPS.reduce((best, s) => {
     const d = Math.hypot(s.x - x, s.z - z);
     return !best || d < best.d ? { shop: s, d } : best;
@@ -275,7 +275,7 @@ export function buildCommerce(parent, colliders, buildBanner) {
   }
 
   const cart = new THREE.Group();
-  cart.position.set(3.1, 0, 38.5);
+  cart.position.set(3.1, 0, 88.5);
   addBox(cart, 1.6, 0.55, 2.1, m.wood, 0, 0.72, 0);
   for (const x of [-0.88, 0.88]) {
     const wheel = addMesh(cart, new THREE.CylinderGeometry(0.48, 0.48, 0.12, 12), m.woodDark, x, 0.48, 0.25);
@@ -284,7 +284,7 @@ export function buildCommerce(parent, colliders, buildBanner) {
   addBox(cart, 0.65, 0.65, 0.65, m.wood, -0.35, 1.3, 0.25);
   addBox(cart, 0.6, 0.6, 0.6, m.wood, 0.35, 1.25, -0.35);
   parent.add(cart);
-  colliders.push({ minX: 2.1, maxX: 4.1, minZ: 37.2, maxZ: 39.8, top: 1.7, kind: 'prop' });
+  colliders.push({ minX: 2.1, maxX: 4.1, minZ: 87.2, maxZ: 89.8, top: 1.7, kind: 'prop' });
 }
 
 // ===========================================================================

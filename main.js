@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CONFIG } from './config.js';
 import { M, disposables, setPBRTextures } from './materials.js';
 import {
-  TOWN, colliders, ladders, world as worldRef,
+  TOWN, colliders, ladders, walkableLanes, world as worldRef,
   buildWorld, setupEnvironment, applyTime, getExposure, getTimeLabel, getNightAmount,
   setEnvMaps, setWeatherMode, setFogEnabled,
 } from './world.js';
@@ -16,6 +16,7 @@ import { updateWind, windUniforms, updateWaterfall, updateBoats, updateMist, upd
 import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
+import { CITY_ZONES } from './districts.js';
 import {
   initBuilder, enterBuilder, exitBuilder, isBuilderEnabled,
   setTool, selectDef, setGizmoMode, refreshPropsPanel, clearAll,
@@ -186,7 +187,7 @@ function initOrbit() {
   orbit.enableDamping = true;
   orbit.dampingFactor = 0.08;
   orbit.minDistance = 20;
-  orbit.maxDistance = 140;
+  orbit.maxDistance = 450;
   orbit.maxPolarAngle = Math.PI / 2.12;
   orbit.minPolarAngle = 0.12;
   orbit.target.set(0, 0, 0);
@@ -416,7 +417,7 @@ function frameTopDown() {
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const radius = Math.max(sphere.radius, 25);
   const fov = THREE.MathUtils.degToRad(camera.fov);
-  const dist = Math.min((radius * 1.25) / Math.sin(fov / 2), 130);
+  const dist = Math.min((radius * 1.25) / Math.sin(fov / 2), 380);
   const center = sphere.center;
   orbit.target.copy(center);
   const dir = new THREE.Vector3(0, 0.82, 0.6).normalize();
@@ -617,14 +618,30 @@ function drawMinimap() {
   const toX = (x) => cx + x * scale;
   const toY = (z) => cy + z * scale;
 
-  // roads
-  mmCtx.strokeStyle = '#6b6152'; mmCtx.lineWidth = 9 * scale * 2;
-  mmCtx.beginPath(); mmCtx.moveTo(toX(-TOWN.half), toY(0)); mmCtx.lineTo(toX(TOWN.half), toY(0)); mmCtx.stroke();
-  mmCtx.beginPath(); mmCtx.moveTo(toX(0), toY(-TOWN.half)); mmCtx.lineTo(toX(0), toY(TOWN.half)); mmCtx.stroke();
+  // districts and roads
+  mmCtx.globalAlpha = 0.35;
+  for (const zone of CITY_ZONES) {
+    mmCtx.fillStyle = zone.color;
+    mmCtx.fillRect(toX(zone.x - zone.w / 2), toY(zone.z - zone.d / 2), zone.w * scale, zone.d * scale);
+  }
+  mmCtx.globalAlpha = 1;
+  for (const lane of walkableLanes) {
+    mmCtx.strokeStyle = '#807363';
+    mmCtx.lineWidth = Math.max(1, lane.half * 2 * scale);
+    mmCtx.beginPath();
+    if (lane.type === 'h') {
+      mmCtx.moveTo(toX(-TOWN.half), toY(lane.offset || 0));
+      mmCtx.lineTo(toX(TOWN.half), toY(lane.offset || 0));
+    } else {
+      mmCtx.moveTo(toX(lane.offset || 0), toY(-TOWN.half));
+      mmCtx.lineTo(toX(lane.offset || 0), toY(TOWN.half));
+    }
+    mmCtx.stroke();
+  }
 
   // pond
   mmCtx.fillStyle = '#3a6478';
-  mmCtx.beginPath(); mmCtx.arc(toX(-26), toY(26), 7*scale, 0, Math.PI*2); mmCtx.fill();
+  mmCtx.beginPath(); mmCtx.arc(toX(-16), toY(16), 7*scale, 0, Math.PI*2); mmCtx.fill();
 
   // plaza
   mmCtx.fillStyle = '#5a5548';

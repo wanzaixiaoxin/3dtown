@@ -6,7 +6,7 @@
   },
 
   "town": {
-    "half": 46,
+    "half": 96,
     "plot": { "x": 24.5, "z": 16, "halfW": 11, "halfD": 10 },
     "approachRoads": {
       "width": 7,
@@ -20,8 +20,8 @@
   "buildings": {
     "grid": {
       "seed": 1,
-      "blockOffsets": [16, 28],
-      "runs": [-34, -20, 20, 34],
+      "blockOffsets": [],
+      "runs": [],
       "size": { "w": [5, 7.5], "d": [5, 6.8], "h": [4, 5.6] },
       "flankSize": { "w": [5, 7], "d": [5, 6.5], "h": [4, 5.6] },
       "gap": 0.3
@@ -29,11 +29,11 @@
     "roofMaterials": ["roofBlue", "roofBrown", "roofGrey"],
     "wallMaterials": ["plaster", "plasterWarm"],
     "reserved": [
-      { "x": -26, "z": 26, "r": 11 },
-      { "x": -13, "z": 20, "r": 8.5 },
-      { "x": -34, "z": 18, "r": 5 },
-      { "x": -30, "z": 30, "r": 4 },
-      { "x": 30, "z": -34, "r": 10 }
+      { "x": -16, "z": 16, "r": 11 },
+      { "x": -10, "z": 20, "r": 8.5 },
+      { "x": -24, "z": 14, "r": 5 },
+      { "x": -22, "z": 24, "r": 4 },
+      { "x": 16, "z": -16, "r": 10 }
     ],
     "pavilion": {
       "x": 17, "z": 0, "w": 6.5, "d": 6.5, "h": 5.4,
@@ -53,9 +53,9 @@
       { "asset": "building2s", "x": 9, "z": 9, "rotY": "PI-0.25" }
     ],
     "farms": [
-      { "asset": "windmill", "x": -38, "z": -8, "rotY": 0.6, "colliderTop": 9.0, "kind": "tower" },
-      { "asset": "barn", "x": 39, "z": 16, "rotY": -0.4, "colliderTop": 4.5, "kind": "house" },
-      { "asset": "coop", "x": 40, "z": 30, "rotY": 0.8, "colliderTop": 2.0, "kind": "house" }
+      { "asset": "windmill", "x": -88, "z": 60, "rotY": 0.6, "colliderTop": 9.0, "kind": "tower" },
+      { "asset": "barn", "x": 88, "z": 60, "rotY": -0.4, "colliderTop": 4.5, "kind": "house" },
+      { "asset": "coop", "x": -88, "z": 36, "rotY": 0.8, "colliderTop": 2.0, "kind": "house" }
     ],
     "shopShell": { "w": 4.8, "d": 3.4, "h": 8.4, "stories": 3, "roofH": 1.8 }
   },
@@ -64,9 +64,9 @@
     "exclusion": {
       "roadHalf": 7,
       "shopRow": { "center": 10, "band": 4, "minZ": 12 },
-      "pond": { "x": -26, "z": 26, "r": 10 },
-      "pavilion": { "x": -13, "z": 20, "r": 8 },
-      "garden": { "x": 30, "z": -34, "r": 10 },
+      "pond": { "x": -16, "z": 16, "r": 10 },
+      "pavilion": { "x": -10, "z": 20, "r": 8 },
+      "garden": { "x": 16, "z": -16, "r": 10 },
       "plotPad": 3
     },
     "roads": { "width": 9, "plazaRadius": 11, "ringInner": 10.2, "ringOuter": 10.9, "cobbles": 900 },
@@ -89,33 +89,33 @@
       "height": 3.4, "baseIntensity": 9, "intensityStep": 2.5, "intensityCycle": 3
     },
     "calls": [
-      { "fn": "pond", "args": [-26, 26, 8] },
-      { "fn": "pavilion", "args": [-13, 20, 1.0] },
-      { "fn": "rockery", "args": [-34, 18, 1.3] },
-      { "fn": "rockery", "args": [-30, 30, 1.0] },
-      { "fn": "garden", "args": [30, -34, 13] },
-      { "fn": "willow", "args": [-34, 26, 1.1] },
-      { "fn": "willow", "args": [-20, 14, 1.0] },
-      { "fn": "willow", "args": [-26, 36, 1.05] },
-      { "fn": "willow", "args": [-36, 34, 0.95] },
-      { "fn": "willow", "args": [24, 33, 1.0] },
+      { "fn": "pond", "args": [-16, 16, 7] },
+      { "fn": "pavilion", "args": [-10, 20, 1.0] },
+      { "fn": "rockery", "args": [-24, 14, 1.3] },
+      { "fn": "rockery", "args": [-22, 24, 1.0] },
+      { "fn": "garden", "args": [16, -16, 10] },
+      { "fn": "willow", "args": [-24, 20, 1.1] },
+      { "fn": "willow", "args": [-12, 8, 1.0] },
+      { "fn": "willow", "args": [-20, 26, 1.05] },
+      { "fn": "willow", "args": [-26, 24, 0.95] },
+      { "fn": "willow", "args": [24, 40, 1.0] },
       { "fn": "flowerBed", "args": [24, -26, 3.0, 140] },
-      { "fn": "flowerBed", "args": [38, -30, 2.5, 100, ["petalYellow", "petalWhite", "petalPink"]] },
-      { "fn": "flowerBed", "args": [-20, 34, 2.2, 90, ["petalRed", "petalPink"]] },
-      { "fn": "flowerBed", "args": [18, 30, 2.4, 100] },
-      { "fn": "flowerBed", "args": [12, -30, 2.0, 80, ["petalYellow", "petalWhite"]] },
-      { "fn": "bush", "args": [[-12, 26], [10, 34], [-38, 8], [36, 8], [26, 20], [-24, -30], [30, -18], [-8, -34]], "scale": [0.65, 0.18, 3] },
-      { "fn": "pine", "args": [-36, 22, 1.0] },
-      { "fn": "pine", "args": [-30, 38, 0.9] },
+      { "fn": "flowerBed", "args": [40, -26, 2.5, 100, ["petalYellow", "petalWhite", "petalPink"]] },
+      { "fn": "flowerBed", "args": [-20, 24, 2.2, 90, ["petalRed", "petalPink"]] },
+      { "fn": "flowerBed", "args": [18, 22, 2.4, 100] },
+      { "fn": "flowerBed", "args": [12, -24, 2.0, 80, ["petalYellow", "petalWhite"]] },
+      { "fn": "bush", "args": [[-12, 26], [10, 26], [-38, 8], [36, 8], [26, 20], [-24, -24], [24, -18], [-8, -24]], "scale": [0.65, 0.18, 3] },
+      { "fn": "pine", "args": [-24, 40, 1.0] },
+      { "fn": "pine", "args": [-24, 44, 0.9] },
       { "fn": "pine", "args": [26, -38, 1.0] },
       { "fn": "pine", "args": [38, -24, 0.85] },
       { "fn": "pine", "args": [-40, -18, 1.05] },
       { "fn": "pine", "args": [40, -2, 0.95] },
-      { "fn": "bamboo", "args": [-37, 6, 11, 1.0] },
-      { "fn": "bamboo", "args": [36, 30, 9, 0.95] },
-      { "fn": "bamboo", "args": [-20, -36, 8, 0.9] },
-      { "fn": "waterfall", "args": [-30, 1.5, 31.6, 2.0, 3.4, 0] },
-      { "fn": "boat", "args": [-21.5, 21.5, -0.7, 1.0] },
+      { "fn": "bamboo", "args": [-40, 12, 11, 1.0] },
+      { "fn": "bamboo", "args": [44, 28, 9, 0.95] },
+      { "fn": "bamboo", "args": [-40, -40, 8, 0.9] },
+      { "fn": "waterfall", "args": [-22, 1.5, 21.6, 2.0, 3.4, 0] },
+      { "fn": "boat", "args": [-13.5, 15.5, -0.7, 1.0] },
       { "fn": "lanternString", "args": [-9, 10.5, 9, 10.5, 4.4, 9, 0.7] },
       { "fn": "lanternString", "args": [-9, -10.5, 9, -10.5, 4.4, 9, 0.7] },
       { "fn": "lanternString", "args": [10.5, -9, 10.5, 9, 4.4, 9, 0.7] },
@@ -123,8 +123,8 @@
       { "fn": "banner", "args": [-7.2, -6.4, "茶", 0.5] },
       { "fn": "banner", "args": [15.4, -3.2, "客栈", -1.2] },
       { "fn": "bronzeDing", "args": [3.6, 4.2, 0.9] },
-      { "fn": "stoneLion", "args": [-4.6, 43.2, 0.95, "PI"] },
-      { "fn": "stoneLion", "args": [4.6, 43.2, 0.95, "PI"] }
+      { "fn": "stoneLion", "args": [-4.6, 93.2, 0.95, "PI"] },
+      { "fn": "stoneLion", "args": [4.6, 93.2, 0.95, "PI"] }
     ]
   },
 
@@ -202,11 +202,11 @@
     "xOffset": 10.1,
     "doorInset": 1.7,
     "insideInset": 0.45,
-    "zPositions": [-38, -31.5, -25, -18.5, 18.5, 25, 31.5, 38],
+    "zPositions": [-56, -49, -42, -23, -16, 16, 23, 42, 49, 56],
     "eastTypeShift": 3,
     "keeper": { "xOffset": 7.85, "zOffset": 0.75 },
     "customer": { "xOffset": 5.7, "zOffset": -0.75 },
-    "exclusion": { "x": -13, "z": 20, "r": 8.5 }
+    "exclusion": { "x": -16, "z": 16, "r": 11 }
   },
 
   "npcs": {
@@ -226,10 +226,10 @@
       "walkClip": "Walk", "idleClip": "Idle"
     },
     "gates": [
-      { "x": 0, "z": 44.5, "nx": 0, "nz": 1, "label": "南门" },
-      { "x": 0, "z": -44.5, "nx": 0, "nz": -1, "label": "北门" },
-      { "x": 44.5, "z": 0, "nx": 1, "nz": 0, "label": "东门" },
-      { "x": -44.5, "z": 0, "nx": -1, "nz": 0, "label": "西门" }
+      { "x": 0, "z": 94.5, "nx": 0, "nz": 1, "label": "南门" },
+      { "x": 0, "z": -94.5, "nx": 0, "nz": -1, "label": "北门" },
+      { "x": 94.5, "z": 0, "nx": 1, "nz": 0, "label": "东门" },
+      { "x": -94.5, "z": 0, "nx": -1, "nz": 0, "label": "西门" }
     ],
     "flow": {
       "enabled": true,
@@ -244,7 +244,7 @@
     },
     "visitPoints": [
       { "id": "well", "customer": { "x": 0, "z": 2.2 }, "keeper": { "x": 0, "z": -1.5 }, "sign": "取水" },
-      { "id": "pavilion", "customer": { "x": -9.5, "z": 17 }, "keeper": { "x": -13, "z": 20 }, "sign": "观景" }
+      { "id": "pavilion", "customer": { "x": -7, "z": 17 }, "keeper": { "x": -10, "z": 20 }, "sign": "观景" }
     ],
     "animals": [
       { "kind": "cow", "x": 20, "z": -20 }, { "kind": "cow", "x": -20, "z": -20 },

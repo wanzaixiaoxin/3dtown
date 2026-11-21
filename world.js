@@ -8,6 +8,7 @@ import { M, trackGeo, disposables } from './materials.js';
 import { batchStatic } from './optimize.js';
 import { instantiate } from './assets.js';
 import { SHOPS, buildCommerce } from './commerce.js';
+import { CITY_ROADS, buildDistricts } from './districts.js';
 import {
   buildGrassField, buildFlowerBed, buildWillow, buildAnimatedPond,
   buildPavilion, buildRockery, buildGarden, buildBush, flushFlowers,
@@ -123,9 +124,9 @@ function addGrassPatches(parent) {
     guard++;
     const x = (Math.random() - 0.5) * TOWN.half * 1.85;
     const z = (Math.random() - 0.5) * TOWN.half * 1.85;
-    if (Math.abs(x) < 5.2 || Math.abs(z) < 5.2) continue;
+    if (CITY_ROADS.some(road => Math.abs(x - road) < 5.2) || CITY_ROADS.some(road => Math.abs(z - road) < 5.2)) continue;
     if (Math.sqrt(x * x + z * z) < 11.5) continue;
-    if (Math.hypot(x + 26, z - 26) < 8) continue; // pond
+    if (Math.hypot(x + 16, z - 16) < 8) continue; // pond
     d.position.set(x, 0.15, z);
     d.rotation.set(0, Math.random() * Math.PI, 0);
     const s = 0.7 + Math.random() * 0.8;
@@ -148,17 +149,24 @@ function buildRoads(parent) {
   const L = TOWN.half * 2;
   const halfWidth = R.width / 2;
   // main N-S and E-W stone lanes
-  const mkLane = (w, len, rotY, name) => {
+  const mkLane = (w, len, rotY, name, offset) => {
     const g = trackGeo(new THREE.PlaneGeometry(w, len));
     const lane = new THREE.Mesh(g, m.roadStone);
     lane.rotation.x = -Math.PI / 2; lane.rotation.z = rotY;
+    if (rotY === 0) lane.position.x = offset;
+    else lane.position.z = offset;
     lane.position.y = 0.04; lane.receiveShadow = true; lane.name = name;
     parent.add(lane);
     return lane;
   };
-  mkLane(R.width, L, 0, 'road-ns');
-  mkLane(R.width, L, Math.PI / 2, 'road-ew');
-  walkableLanes.push({ type: 'h', half: halfWidth }, { type: 'v', half: halfWidth });
+  for (const offset of CITY_ROADS) {
+    mkLane(R.width, L, 0, `road-v-${offset}`, offset);
+    mkLane(R.width, L, Math.PI / 2, `road-h-${offset}`, offset);
+    walkableLanes.push(
+      { type: 'v', offset, half: halfWidth },
+      { type: 'h', offset, half: halfWidth },
+    );
+  }
 
   // central plaza
   const plaza = new THREE.Mesh(trackGeo(new THREE.CylinderGeometry(R.plazaRadius, R.plazaRadius, 0.02, 40)), m.stoneLt);
@@ -898,6 +906,8 @@ export function buildWorld(scene, assets = null) {
     buildHouse(world, ...def);
   }
 
+  buildDistricts(world, { buildHouse, buildTree, colliders });
+
   // --- pavilion on the plaza east edge (two-tier) ---
   const PV = BUILD_CFG.pavilion;
   const pav = buildHouse(world, PV.x, PV.z, PV.w, PV.d, PV.h,
@@ -942,7 +952,8 @@ export function buildWorld(scene, assets = null) {
   const TS = SCENERY_CFG.treeScale;
   const blockedTree = (x, z) =>
     Math.hypot(x - EX.pond.x, z - EX.pond.z) < EX.pond.r ||
-    Math.abs(x) < EX.roadHalf || Math.abs(z) < EX.roadHalf ||
+    CITY_ROADS.some(road => Math.abs(x - road) < EX.roadHalf) ||
+    CITY_ROADS.some(road => Math.abs(z - road) < EX.roadHalf) ||
     (Math.abs(Math.abs(x) - EX.shopRow.center) < EX.shopRow.band && Math.abs(z) > EX.shopRow.minZ) ||
     Math.hypot(x - EX.pavilion.x, z - EX.pavilion.z) < EX.pavilion.r ||
     Math.hypot(x - EX.garden.x, z - EX.garden.z) < EX.garden.r ||
@@ -985,7 +996,8 @@ export function buildWorld(scene, assets = null) {
       if (!spec) return;
       const [base, step, cycle] = spec;
       list.forEach(([bx, bz], i) => {
-        if (Math.abs(bx) < EX.roadHalf || Math.abs(bz) < EX.roadHalf) return;
+        if (CITY_ROADS.some(road => Math.abs(bx - road) < EX.roadHalf) ||
+            CITY_ROADS.some(road => Math.abs(bz - road) < EX.roadHalf)) return;
         if (inPlot(bx, bz, 2)) return;
         buildBush(world, bx, bz, base + (i % cycle) * step);
       });
