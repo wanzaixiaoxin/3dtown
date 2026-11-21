@@ -9,6 +9,7 @@ import {
 } from './assets.js';
 import { TOWN, colliders } from './world.js';
 import { SHOPS } from './commerce.js';
+import { makeAppearance, applyAppearance, footDropScale, disposeAppearance } from './appearance.js';
 
 const NPC_CFG = CONFIG.npcs;
 const VILLAGER_CFG = NPC_CFG.villagers;
@@ -505,6 +506,7 @@ function addNPC(instance, opts) {
     flowState: opts.flow ? 'dormant' : 'resident',
     targetExit: false,
     variant: opts.variant || 0,
+    appearance: opts.appearance || null,
     interactionT: 0,
     gestureT: 2 + Math.random() * 5,
     yaw: opts.faceYaw ?? Math.random() * Math.PI * 2,
@@ -585,6 +587,17 @@ function slideVelocity(n, pushX, pushZ) {
   if (into < 0) { n.vel.x -= into * ux; n.vel.z -= into * uz; }
 }
 
+// 为村民生成配色 + 外观（体型/发型/款式）。外观必须在 addNPC 之前应用到实例，
+// 这样 createGaitState 记录的 footRestY 才是缩放后的脚踝高度。
+// gender 由模型 kind 决定：woman→女，其余→男。
+function buildVillagerLook(kind, seed, wantColors) {
+  const gender = /woman|female|girl/i.test(kind) ? 'female' : 'male';
+  const app = makeAppearance(seed, gender);
+  const colors = wantColors ? randomCharacterColors() : null;
+  if (colors && app.bald) colors.hair = colors.skin; // 光头：头发染成肤色
+  return { app, colors };
+}
+
 // assets = dictionary from preloadAssets()
 export function spawnNPCs(s, assets) {
   scene = s;
@@ -616,12 +629,14 @@ export function spawnNPCs(s, assets) {
       ];
     }
     const [x, z] = freeSpot(spot.x, spot.z, traveler ? travellerLimit : undefined);
+    const look = buildVillagerLook(kind, i + 1, VILLAGER_CFG.randomColors);
     const inst = instantiate(assets[kind], {
       x, z,
-      colors: VILLAGER_CFG.randomColors ? randomCharacterColors() : null,
+      colors: look.colors,
       variant: i + 1,
     });
     if (!inst) continue;
+    applyAppearance(inst, look.app);
     addNPC(inst, {
       type: 'villager', x, z,
       speed: keeper ? 0 : (SP.base + (i % SP.cycle) * SP.step) * (traveler ? SP.travelerScale : 1),
@@ -630,6 +645,7 @@ export function spawnNPCs(s, assets) {
       routeIndex: (i * VILLAGER_CFG.routeStep) % SHOPS.length,
       itinerary,
       variant: i + 1,
+      appearance: look.app,
       faceYaw: keeper ? (SHOPS[(i * 2) % SHOPS.length].side < 0 ? Math.PI / 2 : -Math.PI / 2) : undefined,
       walkClip: VILLAGER_CFG.walkClip, idleClip: VILLAGER_CFG.idleClip,
     });
@@ -669,18 +685,21 @@ export function spawnNPCs(s, assets) {
       const kind = kinds[i % kinds.length];
       const gate = GATES[i % GATES.length];
       const sp = gatePoint(gate, APPROACH.spawnRatio);
+      const look = buildVillagerLook(kind, i + 100, FLOW_CFG.randomColors);
       const inst = instantiate(assets[kind], {
         x: sp.x, z: sp.z,
-        colors: FLOW_CFG.randomColors ? randomCharacterColors() : null,
+        colors: look.colors,
         variant: i + 1,
       });
       if (!inst) continue;
+      applyAppearance(inst, look.app);
       inst.visible = false;   // 初始全部休眠，由调度器陆续放出
       const n = addNPC(inst, {
         type: 'villager', x: sp.x, z: sp.z, speed: 1, radius: VILLAGER_CFG.radius,
         role: 'traveler', flow: true,
         walkClip: VILLAGER_CFG.walkClip, idleClip: VILLAGER_CFG.idleClip,
         variant: i + 1,
+        appearance: look.app,
       });
       flowPool.push(n);
     }
@@ -959,7 +978,7 @@ function groundFeet(n, dt) {
   // 因此按 walkBlend 抬高目标脚踝高度，抵消脚掌下沉，避免整只脚陷进地面。
   // 静止(walkBlend=0)时不补偿，脚掌本就贴地。
   const footLift = n.type === 'villager'
-    ? gaitTuning.footDrop * (n.walkBlend || 0) : 0;
+    ? gaitTuning.footDrop * footDropScale(n.appearance) * (n.walkBlend || 0) : 0;
   let lowestOffset = Infinity;
   for (const name in n.footRestY) {
     const bone = n.bones[name];
@@ -1669,4 +1688,5 @@ export function disposeNPCs() {
   flowPool.length = 0;
   flowInitialized = false;
   flowSpawnTimer = 0;
+  disposeAppearance();
 }

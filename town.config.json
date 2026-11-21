@@ -300,6 +300,29 @@
     }
   },
 
+  "characterAppearance": {
+    "ages": {
+      "child":  { "weight": 0.14, "scale": { "x": 0.68, "y": 0.62, "z": 0.68 }, "hair": "0x2a1d14" },
+      "teen":   { "weight": 0.16, "scale": { "x": 0.89, "y": 0.86, "z": 0.89 }, "hair": "0x241910" },
+      "adult":  { "weight": 0.50, "scale": { "x": 1.00, "y": 1.00, "z": 1.00 }, "hair": "0x1d150f" },
+      "senior": { "weight": 0.20, "scale": { "x": 0.98, "y": 0.95, "z": 0.98 }, "hair": "0xa89e92" }
+    },
+    "outfits": [
+      { "name": "布衣", "sash": "0x6b5a42", "headwear": "none" },
+      { "name": "短褐", "sash": "0x4a3b30", "headwear": "none" },
+      { "name": "商贾", "sash": "0x8c6a2f", "headwear": "skullcap" },
+      { "name": "书生", "sash": "0x4f5f6b", "headwear": "square" },
+      { "name": "伙计", "sash": "0x7a5233", "headwear": "none" },
+      { "name": "农户", "sash": "0x5c6b48", "headwear": "conical" }
+    ],
+    "headwear": {
+      "conical":  { "color": "0x9a8256", "accent": "0x6b5638" },
+      "skullcap": { "color": "0x3a3128", "accent": "0x1a1410" },
+      "square":   { "color": "0x39434a", "accent": "0x242a2e" },
+      "scarf":    { "color": "0x5b4a38", "accent": "0x33291f" }
+    }
+  },
+
   "assets": {
     "base": "./assets/models/",
     "concurrency": 3,
