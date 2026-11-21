@@ -220,8 +220,10 @@ function findPathCells(sc, sr, tc, tr, g) {
 
 function lineClear(x0, z0, x1, z1, r = 0.5) {
   const dx = x1 - x0, dz = z1 - z0;
-  const steps = Math.ceil(Math.hypot(dx, dz) / 0.55);
-  for (let i = 1; i < steps; i++) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.3));
+  // 必须从 i=0 开始：NPC 贴着摊位/灯柱时，障碍往往只占起点前几厘米，
+  // 旧版跳过起点 + 0.55 采样会误判为「直线可达」，导致 NPC 一直顶着障碍。
+  for (let i = 0; i <= steps; i++) {
     const t = i / steps;
     if (navBlocked(x0 + dx * t, z0 + dz * t, r)) return false;
   }
@@ -251,6 +253,12 @@ function planPath(x0, z0, gx, gz) {
     }
     out.push(pts[best]); cx = pts[best][0]; cz = pts[best][1]; i = best + 1;
   }
+  // 起点贴着障碍时，A* 首个格心可能在直线视线之外；先插一个可见的脱困点，
+  // 否则 NPC 会一直顶着障碍却永远到不了第一个路点。
+  if (out.length && !lineClear(x0, z0, out[0][0], out[0][1], 0.5)) {
+    const esc = escapePoint(x0, z0, gx, gz);
+    if (esc) out.unshift(esc);
+  }
   return out;
 }
 
@@ -272,6 +280,27 @@ function reachablePoint(n, x, z) {
     return null;
   };
   return spiral(true) || spiral(false) || [n.home.x, n.home.y];
+}
+
+// 顶墙时找一个「先离开障碍」的临时落脚点：必须当前可见、自身可站，
+// 并尽量让后续到目标的视线通畅。用于脱困时替代纯侧向推力。
+function escapePoint(x0, z0, gx, gz) {
+  const candidates = [];
+  for (const radius of [1.2, 1.8, 2.6]) {
+    for (let a = 0; a < 16; a++) {
+      const ang = (a / 16) * Math.PI * 2;
+      const ex = x0 + Math.cos(ang) * radius;
+      const ez = z0 + Math.sin(ang) * radius;
+      if (navBlocked(ex, ez, 0.45)) continue;
+      if (!lineClear(x0, z0, ex, ez, 0.45)) continue;
+      const score = Math.hypot(ex - gx, ez - gz) + (lineClear(ex, ez, gx, gz, 0.45) ? 0 : 2);
+      candidates.push([ex, ez, score]);
+    }
+    if (candidates.length) break;
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a[2] - b[2]);
+  return [candidates[0][0], candidates[0][1]];
 }
 
 // ---------------------------------------------------------------------------
@@ -810,14 +839,24 @@ function updateInteraction(n, dt) {
   return true;
 }
 
+// 卡死检测的进度基准：目标或路点变化时必须重置，否则旧基准会误判。
+function resetGoalCheck(n) {
+  n.goalCheckT = 0;
+  n.stallT = 0;
+  n.goalPrevDist = n.path
+    ? Math.hypot(n.path[0][0] - n.pos.x, n.path[0][1] - n.pos.z)
+    : Math.hypot(n.target.x - n.pos.x, n.target.z - n.pos.z);
+}
+
 // 统一设置目标：校正到可达点，并作废旧路径（目标变了必须重新规划）。
 function setTarget(n, x, z) {
   const [px, pz] = reachablePoint(n, x, z);
   n.target.set(px, 0, pz);
   n.path = null;
   n.pathGoal = null;
-  n.stallT = 0;
   n.pushT = 0;
+  n.stallSide = 0;
+  resetGoalCheck(n);
 }
 
 function advanceTarget(n) {
@@ -1009,20 +1048,32 @@ export function updateNPCs(dt, nightAmount = 0) {
       n.path = null; n.pathGoal = null;
       if (!lineClear(n.pos.x, n.pos.z, n.target.x, n.target.z, n.shopEntry ? 0.3 : 0.5)) {
         const planned = planPath(n.pos.x, n.pos.z, n.target.x, n.target.z);
-        if (planned && planned.length) { n.path = planned; n.pathGoal = [n.target.x, n.target.z]; }
+        if (planned && planned.length) { n.path = planned; n.pathGoal = [n.target.x, n.target.z]; resetGoalCheck(n); }
       }
     }
     // 消费已到达的路径点（视线捷径让队列通常只剩 1~2 点）
     if (n.path && n.path.length) {
       const head = n.path[0];
       const next = n.path.length > 1 ? n.path[1] : n.target;
+      // next 可能是 A* 路点数组 [x,z]，也可能是目标 Vector3，取坐标方式不同。
+      const nx = Array.isArray(next) ? next[0] : next.x;
+      const nz = Array.isArray(next) ? next[1] : next.z;
       if (Math.hypot(head[0] - n.pos.x, head[1] - n.pos.z) < 0.85 ||
-          lineClear(n.pos.x, n.pos.z, next.x, next.z)) {
+          lineClear(n.pos.x, n.pos.z, nx, nz)) {
         n.path.shift();
         // 路径点消费完即置空，但保留 pathGoal 供「到站判定」识别已抵达，
         // 直到 advanceTarget 换新目标时才由 setTarget 清除。
         if (!n.path.length) n.path = null;
+        resetGoalCheck(n);
       }
+    }
+    // 路径可能因碰撞推挤而失效：首个路点不再可见时立刻重规划，
+    // 不能等 stall 计时——否则 NPC 会持续朝一个走不到的点顶墙。
+    if (n.path && !lineClear(n.pos.x, n.pos.z, n.path[0][0], n.path[0][1], 0.45)) {
+      const planned = planPath(n.pos.x, n.pos.z, n.target.x, n.target.z);
+      n.path = planned && planned.length ? planned : null;
+      n.pathGoal = n.path ? [n.target.x, n.target.z] : null;
+      resetGoalCheck(n);
     }
     const gx = n.path ? n.path[0][0] : n.target.x;
     const gz = n.path ? n.path[0][1] : n.target.z;
@@ -1121,46 +1172,76 @@ export function updateNPCs(dt, nightAmount = 0) {
       n.locoTimer = 0;
     }
 
-    // 卡死检测：基于真实位移（EMA 平滑速度会被碰撞推挤虚高，导致漏判）。
-    // 持续推力 pushT：脱离灯柱/摊位这类小障碍需要好几帧侧向力，单次推力无效。
+    // 持续脱困推力：脱离灯柱/摊位这类小障碍需要好几帧侧向力，单次推力无效。
     n.pushT = Math.max(0, (n.pushT || 0) - dt);
     if (n.pushT > 0 && n.pushDir) {
       n.vel.x += n.pushDir[0] * n.speed * dt * 3.2;
       n.vel.z += n.pushDir[1] * n.speed * dt * 3.2;
     }
-    // waitT>0 是主动停留（拜访/候客/进店），不算卡死
-    if (realMove < dt * 0.14 && moveDist > 0.9 && n.waitT <= 0) {
-      n.stallT = (n.stallT || 0) + dt;
-      if (n.stallT > 0.9) {
+
+    // 卡死检测：按「到当前路点的距离是否真的在缩短」判定，而不是看单帧位移。
+    // 顶墙时物理分离会把每帧位移压到几乎为零，但又会留下微小抖动；
+    // 旧口径会被抖动反复清零，导致 NPC 原地顶墙几十秒。
+    const activeGoal = n.path ? n.path[0] : null;
+    const gx0 = (activeGoal ? activeGoal[0] : n.target.x) - n.pos.x;
+    const gz0 = (activeGoal ? activeGoal[1] : n.target.z) - n.pos.z;
+    const goalDist = Math.hypot(gx0, gz0);
+    if (n.goalCheckT === undefined) { n.goalCheckT = 0; n.goalPrevDist = goalDist; }
+    n.goalCheckT += dt;
+    if (n.goalCheckT >= 0.6) {
+      const progress = n.goalPrevDist - goalDist;
+      // waitT / shopVisitT > 0 是主动停留，不算卡死
+      if (progress < 0.15 && goalDist > 0.9 && n.waitT <= 0 && n.shopVisitT <= 0) {
+        n.stallT = (n.stallT || 0) + n.goalCheckT;
+      } else {
         n.stallT = 0;
-        n.path = null; n.pathGoal = null;
-        const gx0 = n.target.x - n.pos.x, gz0 = n.target.z - n.pos.z;
-        const gl0 = Math.hypot(gx0, gz0) || 1;
-        // 选一个自由侧向作为持续脱困方向，施加 0.7 秒
-        let pushed = false;
-        for (const side of [1, -1]) {
-          const ex = n.pos.x + (-gz0 / gl0) * side * 1.6;
-          const ez = n.pos.z + (gx0 / gl0) * side * 1.6;
-          if (!navBlocked(ex, ez, 0.45)) {
-            n.pushDir = [-gz0 / gl0 * side, gx0 / gl0 * side];
-            n.pushT = 0.7;
-            pushed = true;
-            break;
-          }
-        }
-        // 目标本身在墙里：强制校正到可达点
-        if (navBlocked(n.target.x, n.target.z)) {
-          const [rx, rz] = reachablePoint(n, n.target.x, n.target.z);
-          setTarget(n, rx, rz);
-        } else if (!lineClear(n.pos.x, n.pos.z, n.target.x, n.target.z, 0.5)) {
-          const planned = planPath(n.pos.x, n.pos.z, n.target.x, n.target.z);
-          if (planned && planned.length) { n.path = planned; n.pathGoal = [n.target.x, n.target.z]; }
-          else if (!pushed) setTarget(n, n.home.x, n.home.y);
-        }
-        n.waitT = Math.max(n.waitT, 0.1);
+        n.stallSide = 0;
       }
-    } else {
+      n.goalCheckT = 0;
+      n.goalPrevDist = goalDist;
+    }
+    if (n.stallT > 1.2) {
       n.stallT = 0;
+      n.goalCheckT = 0;
+      n.goalPrevDist = goalDist;
+      n.path = null; n.pathGoal = null;
+      const gl0 = Math.hypot(gx0, gz0) || 1;
+      // 优先插入一个「先绕开眼前障碍」的路点；纯侧向推力只能挪几十厘米，
+      // 面对灯柱/摊位这类小障碍仍然会反复顶墙。
+      const escape = escapePoint(n.pos.x, n.pos.z, n.target.x, n.target.z);
+      if (escape) {
+        const edx = escape[0] - n.pos.x, edz = escape[1] - n.pos.z;
+        const ed = Math.hypot(edx, edz) || 1;
+        n.pushDir = [edx / ed, edz / ed];
+        n.pushT = 1.0;
+        n.stallSide = 0;
+      } else {
+        if (!n.stallSide) {
+          for (const side of [1, -1]) {
+            const ex = n.pos.x + (-gz0 / gl0) * side * 1.6;
+            const ez = n.pos.z + (gx0 / gl0) * side * 1.6;
+            if (!navBlocked(ex, ez, 0.45)) { n.stallSide = side; break; }
+          }
+          if (!n.stallSide) n.stallSide = 1;
+        }
+        n.pushDir = [-gz0 / gl0 * n.stallSide, gx0 / gl0 * n.stallSide];
+        n.pushT = 1.0;
+      }
+      // 目标本身在墙里：强制校正到可达点
+      if (navBlocked(n.target.x, n.target.z)) {
+        const [rx, rz] = reachablePoint(n, n.target.x, n.target.z);
+        setTarget(n, rx, rz);
+      } else {
+        const planned = planPath(n.pos.x, n.pos.z, n.target.x, n.target.z) || [];
+        n.path = escape ? [escape, ...planned] : planned;
+        if (n.path.length) {
+          n.pathGoal = [n.target.x, n.target.z];
+          resetGoalCheck(n);
+        } else {
+          setTarget(n, n.home.x, n.home.y);
+        }
+      }
+      n.waitT = Math.max(n.waitT, 0.1);
     }
 
     n.group.position.x = n.pos.x;
