@@ -818,6 +818,8 @@ export const gaitTuning = {
   arm: 0.34,          // 手臂前后摆幅(rad)
   elbow: 0.16,        // 手肘恒定微屈(rad)
   adduction: 0.055,   // 髋内收：让双脚向身体中线靠拢，纠正模型本身的O型站姿(rad)
+  armLength: 0.88,    // 手臂长度系数：模型手臂偏长，缩短后手垂到胯部而非膝盖
+  handScale: 0.85,    // 手掌等比缩放：模型手掌偏大
   bob: 0.018,         // 髋部上下起伏(m)
   sway: 0.016,        // 髋部左右摇摆(m)
   counter: 0.05,      // 躯干/头部反向旋转(rad)
@@ -825,8 +827,23 @@ export const gaitTuning = {
   freqSpeed: 2.6,     // 步频随速度系数
 };
 
+// 模型手臂偏长、手掌偏大。骨骼局部 Y 轴沿肢体长度方向，缩放 UpperArm 缩短整条手臂；
+// Palm 的 Y 会继承 UpperArm 的缩放，故除以 armLength 后再乘 handScale 才能等比缩手。
+// 注意 AnimationMixer 每帧会从 scale 轨道写回原始值，所以必须每帧覆盖。
+function applyArmProportions(n) {
+  const P = gaitTuning;
+  const al = P.armLength, hs = P.handScale;
+  if (al === 1 && hs === 1) return;
+  for (const side of ['L', 'R']) {
+    const upper = n.bones['UpperArm' + side], palm = n.bones['Palm' + side];
+    if (upper) upper.scale.set(1, al, 1);
+    if (palm) palm.scale.set(hs, hs / al, hs);
+  }
+}
+
 function applyHumanGait(n, dt, w, speed) {
   const P = gaitTuning;
+  applyArmProportions(n);
   const cur = n.curAction;
   const clip = cur && cur.getClip ? cur.getClip() : null;
   const pose = n.poseSample;
