@@ -705,6 +705,7 @@ function poseQuadrupedLeg(n, upper, lower, foot, upperAngle, flexion, hind = fal
 
 const WORLD_SIDE = new THREE.Vector3(1, 0, 0);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const WORLD_FORWARD = new THREE.Vector3(0, 0, 1);
 const _qRoot = new THREE.Quaternion();
 const _qBone = new THREE.Quaternion();
 const _axis = new THREE.Vector3();
@@ -816,6 +817,7 @@ export const gaitTuning = {
   ankle: 0.92,        // 脚踝跟随大腿+小腿、保持脚掌接近水平的系数
   arm: 0.34,          // 手臂前后摆幅(rad)
   elbow: 0.16,        // 手肘恒定微屈(rad)
+  adduction: 0.055,   // 髋内收：让双脚向身体中线靠拢，纠正模型本身的O型站姿(rad)
   bob: 0.018,         // 髋部上下起伏(m)
   sway: 0.016,        // 髋部左右摇摆(m)
   counter: 0.05,      // 躯干/头部反向旋转(rad)
@@ -866,6 +868,11 @@ function applyHumanGait(n, dt, w, speed) {
   const kneeL = Math.max(0, -s) * P.knee * w, kneeR = Math.max(0, s) * P.knee * w;
   rotateBone(n, 'UpperLegL', WORLD_SIDE, thighL);
   rotateBone(n, 'UpperLegR', WORLD_SIDE, thighR);
+  // 模型本身是O型腿站姿，给大腿加髋内收让双脚靠近身体中线。
+  if (P.adduction) {
+    rotateBone(n, 'UpperLegL', WORLD_FORWARD, -P.adduction * w);
+    rotateBone(n, 'UpperLegR', WORLD_FORWARD, P.adduction * w);
+  }
   rotateBone(n, 'LowerLegL', WORLD_SIDE, kneeL);
   rotateBone(n, 'LowerLegR', WORLD_SIDE, kneeR);
   rotateBone(n, 'FootL', WORLD_SIDE, -(thighL + kneeL) * P.ankle);
