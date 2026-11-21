@@ -82,6 +82,199 @@ function blocked(x, z, r = 0.35) {
 function faceYaw(yaw) { return yaw; }
 
 // ---------------------------------------------------------------------------
+//  导航：网格 A* + 视线平滑
+//  单一路径规划器替代旧的「单点绕障」——后者面对连续建筑会反复选角点抖动。
+//  网格在碰撞体数量变化时惰性重建，兼容「我的城市」动态加墙。
+// ---------------------------------------------------------------------------
+function shortestAngle(diff) {
+  return THREE.MathUtils.euclideanModulo(diff + Math.PI, Math.PI * 2) - Math.PI;
+}
+
+const NAV_CELL = 1.6;
+const NAV_NEIGHBORS = [
+  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [1, 1], [1, -1], [-1, 1], [-1, -1],
+];
+let nav = null;
+
+// 与 blocked() 的区别：水也算障碍（NPC 不该横穿池塘），且用导航专用膨胀半径。
+function navBlocked(x, z, r = 0.62) {
+  for (const c of colliders) {
+    if (c.top !== undefined && c.top < 0.4 && !c.water) continue;
+    const pad = r + (c.water ? 0.3 : 0);
+    if (x > c.minX - pad && x < c.maxX + pad && z > c.minZ - pad && z < c.maxZ + pad) return true;
+  }
+  return false;
+}
+
+function ensureNav() {
+  if (nav && nav.version === colliders.length) return nav;
+  const limit = flowLimit + 2;
+  const min = -limit;
+  const size = Math.ceil((limit * 2) / NAV_CELL);
+  const passable = new Uint8Array(size * size);
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const x = min + (c + 0.5) * NAV_CELL;
+      const z = min + (r + 0.5) * NAV_CELL;
+      passable[r * size + c] = navBlocked(x, z, 0.62) ? 0 : 1;
+    }
+  }
+  nav = { min, size, passable, version: colliders.length };
+  return nav;
+}
+
+const clampCell = (v, n) => v < 0 ? 0 : (v >= n ? n - 1 : v);
+function cellOf(x, z, g) {
+  return [clampCell(Math.floor((x - g.min) / NAV_CELL), g.size),
+          clampCell(Math.floor((z - g.min) / NAV_CELL), g.size)];
+}
+function cellCenter(c, r, g) {
+  return [g.min + (c + 0.5) * NAV_CELL, g.min + (r + 0.5) * NAV_CELL];
+}
+function nearestFreeCell(x, z, g, maxRing = 8) {
+  const [c0, r0] = cellOf(x, z, g);
+  if (g.passable[r0 * g.size + c0]) return [c0, r0];
+  for (let ring = 1; ring <= maxRing; ring++) {
+    for (let dr = -ring; dr <= ring; dr++) {
+      for (let dc = -ring; dc <= ring; dc++) {
+        if (Math.max(Math.abs(dc), Math.abs(dr)) !== ring) continue;
+        const c = c0 + dc, r = r0 + dr;
+        if (c < 0 || r < 0 || c >= g.size || r >= g.size) continue;
+        if (g.passable[r * g.size + c]) return [c, r];
+      }
+    }
+  }
+  return null;
+}
+
+// 二叉最小堆（按 score 数组里的值排序）
+function heapPush(heap, idx, score) {
+  heap.push(idx);
+  let i = heap.length - 1;
+  while (i > 0) {
+    const p = (i - 1) >> 1;
+    if (score[heap[p]] <= score[heap[i]]) break;
+    [heap[p], heap[i]] = [heap[i], heap[p]]; i = p;
+  }
+}
+function heapPop(heap, score) {
+  const top = heap[0];
+  const last = heap.pop();
+  if (heap.length) {
+    heap[0] = last;
+    let i = 0;
+    for (;;) {
+      const l = i * 2 + 1, r = l + 1;
+      let s = i;
+      if (l < heap.length && score[heap[l]] < score[heap[s]]) s = l;
+      if (r < heap.length && score[heap[r]] < score[heap[s]]) s = r;
+      if (s === i) break;
+      [heap[s], heap[i]] = [heap[i], heap[s]]; i = s;
+    }
+  }
+  return top;
+}
+
+function findPathCells(sc, sr, tc, tr, g) {
+  const N = g.size * g.size;
+  const start = sr * g.size + sc, goal = tr * g.size + tc;
+  if (start === goal) return [];
+  const gScore = new Float32Array(N).fill(Infinity);
+  const fScore = new Float32Array(N).fill(Infinity);
+  const came = new Int32Array(N).fill(-1);
+  const closed = new Uint8Array(N);
+  const heap = [];
+  gScore[start] = 0;
+  fScore[start] = Math.hypot(tc - sc, tr - sr);
+  heapPush(heap, start, fScore);
+  let guard = 0;
+  while (heap.length && guard++ < 8000) {
+    const cur = heapPop(heap, fScore);
+    if (closed[cur]) continue;
+    if (cur === goal) {
+      const path = [];
+      for (let p = cur; p !== start && p >= 0; p = came[p]) path.push(p);
+      path.reverse();
+      return path;
+    }
+    closed[cur] = 1;
+    const cc = cur % g.size, cr = (cur / g.size) | 0;
+    for (const [dc, dr] of NAV_NEIGHBORS) {
+      const nc = cc + dc, nr = cr + dr;
+      if (nc < 0 || nr < 0 || nc >= g.size || nr >= g.size) continue;
+      const ni = nr * g.size + nc;
+      if (!g.passable[ni] || closed[ni]) continue;
+      // 对角线不允许贴着墙角切过去（两侧正交格都必须可走）
+      if (dc && dr && (!g.passable[cr * g.size + nc] || !g.passable[nr * g.size + cc])) continue;
+      const tentative = gScore[cur] + (dc && dr ? 1.4142 : 1);
+      if (tentative < gScore[ni]) {
+        came[ni] = cur; gScore[ni] = tentative;
+        fScore[ni] = tentative + Math.hypot(tc - nc, tr - nr);
+        heapPush(heap, ni, fScore);
+      }
+    }
+  }
+  return null;
+}
+
+function lineClear(x0, z0, x1, z1, r = 0.5) {
+  const dx = x1 - x0, dz = z1 - z0;
+  const steps = Math.ceil(Math.hypot(dx, dz) / 0.55);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (navBlocked(x0 + dx * t, z0 + dz * t, r)) return false;
+  }
+  return true;
+}
+
+// 规划世界坐标路径点（含视线平滑，去掉 A* 的锯齿）。
+function planPath(x0, z0, gx, gz) {
+  const g = ensureNav();
+  const from = nearestFreeCell(x0, z0, g);
+  const to = nearestFreeCell(gx, gz, g);
+  if (!from || !to) return null;
+  const cells = findPathCells(from[0], from[1], to[0], to[1], g);
+  if (!cells) return null;
+  const pts = cells.map(idx => {
+    const [cx, cz] = cellCenter(idx % g.size, (idx / g.size) | 0, g);
+    return [cx, cz];
+  });
+  pts.push([gx, gz]);
+  // 贪心视线平滑：从当前位置跳跃到最远可直达的路点
+  const out = [];
+  let cx = x0, cz = z0, i = 0;
+  while (i < pts.length) {
+    let best = i;
+    for (let j = pts.length - 1; j > i; j--) {
+      if (lineClear(cx, cz, pts[j][0], pts[j][1])) { best = j; break; }
+    }
+    out.push(pts[best]); cx = pts[best][0]; cz = pts[best][1]; i = best + 1;
+  }
+  return out;
+}
+
+// 目标点落到障碍里时，螺旋搜索最近的可达点（优先直线可见）。
+function reachablePoint(n, x, z) {
+  const lim = npcLimit(n);
+  [x, z] = clampTown(x, z, lim);
+  if (!navBlocked(x, z) && lineClear(n.pos.x, n.pos.z, x, z)) return [x, z];
+  const spiral = (visibleOnly) => {
+    for (let ring = 1; ring <= 10; ring++) {
+      for (let a = 0; a < 16; a++) {
+        const ang = (a / 16) * Math.PI * 2, rr = ring * 1.1;
+        const nx = x + Math.cos(ang) * rr, nz = z + Math.sin(ang) * rr;
+        const [px, pz] = clampTown(nx, nz, lim);
+        if (navBlocked(px, pz)) continue;
+        if (!visibleOnly || lineClear(n.pos.x, n.pos.z, px, pz)) return [px, pz];
+      }
+    }
+    return null;
+  };
+  return spiral(true) || spiral(false) || [n.home.x, n.home.y];
+}
+
+// ---------------------------------------------------------------------------
 //  持续人流：对象池 + 生命周期状态机
 //  流动人口预先创建并复用，不反复实例化/销毁 skinned mesh（避免持续 GC 与卡顿）。
 //  dormant → spawn(城外) → enter(进城) → visit(逛店) → exit(出城) → dormant
@@ -140,6 +333,7 @@ function spawnFlowUnit(n, assets) {
   n.pos.set(sp.x, 0, sp.z);
   n.group.position.set(sp.x, 0, sp.z);
   n.target.set(n.itinerary[0].x, 0, n.itinerary[0].z);
+  n.path = null; n.pathGoal = null; n.stallT = 0;   // 复用对象：清除上一次行程残留
   n.targetShopId = null; n.shopDoor = null; n.shopInside = null; n.shopEntry = false;
   n.shopVisitDoor = null; n.shopVisitInside = null; n.shopExitDwell = 0;
   n.targetExit = false;
@@ -233,10 +427,12 @@ function addNPC(instance, opts) {
     role: opts.role || 'wander',
     routeIndex: opts.routeIndex || 0,
     itinerary: opts.itinerary || null,
-    // 临时绕行点：只改变当前走向，不覆盖 itinerary 目标
-    detour: null,
-    detourT: 0,
-    detourGap: 0,
+    // A* 路径点队列（世界坐标 [x,z]）；为空表示直线可达目标
+    path: null,
+    pathGoal: null,
+    stallT: 0,
+    pushT: 0,          // 脱困侧向推力剩余时长
+    pushDir: null,
     flow: !!opts.flow,
     flowState: opts.flow ? 'dormant' : 'resident',
     targetExit: false,
@@ -268,7 +464,7 @@ function switchClip(npc, clipName, speed = 1, dt = 0) {
   const clips = npc.group.animations || [];
   const clip = clips.find(c => c.name.toLowerCase().includes(clipName.toLowerCase()));
   if (!clip || !npc.mixer) return;
-  if (npc.curAction && npc.curAction._clip === clip) {
+  if (npc.curAction && npc.curAction.getClip() === clip) {
     // same clip: ease playback speed toward the target so feet don't skate or
     // stutter when the physical speed jitter frame-to-frame
     const t = dt > 0 ? Math.min(1, dt * 5) : 1;
@@ -304,43 +500,6 @@ function separate(x, z, r) {
     else z = c.maxZ + r;
   }
   return [x, z];
-}
-
-// 预测性绕障：沿单位方向采样，返回最近会挡路的静态碰撞体。
-function obstacleAhead(x, z, dx, dz, maxDist, r = 0.62) {
-  const step = 0.6;
-  for (let d = step; d <= maxDist; d += step) {
-    const px = x + dx * d, pz = z + dz * d;
-    for (const c of colliders) {
-      if (c.water || (c.top !== undefined && c.top < 0.4)) continue;
-      if (px > c.minX - r && px < c.maxX + r && pz > c.minZ - r && pz < c.maxZ + r) {
-        return { c, d };
-      }
-    }
-  }
-  return null;
-}
-
-// 为障碍选一个能直线到达、且绕过去总路程最短的外侧角点。
-function detourAround(c, x, z, gx, gz, dx, dz, r = 0.66) {
-  const ex0 = c.minX - r, ex1 = c.maxX + r;
-  const ez0 = c.minZ - r, ez1 = c.maxZ + r;
-  let best = null, bestScore = Infinity;
-  for (const [cx, cz] of [[ex0, ez0], [ex0, ez1], [ex1, ez0], [ex1, ez1]]) {
-    const vx = cx - x, vz = cz - z;
-    if (vx * dx + vz * dz < -0.4) continue;   // 不选身后
-    let clear = true;                          // 直线不能穿过障碍本体
-    for (let t = 0.15; t < 0.95; t += 0.12) {
-      const sx = x + vx * t, sz = z + vz * t;
-      if (sx > c.minX + 0.05 && sx < c.maxX - 0.05 && sz > c.minZ + 0.05 && sz < c.maxZ - 0.05) {
-        clear = false; break;
-      }
-    }
-    if (!clear) continue;
-    const score = Math.hypot(vx, vz) + Math.hypot(cx - gx, cz - gz);
-    if (score < bestScore) { bestScore = score; best = [cx, cz]; }
-  }
-  return best;
 }
 
 // 沿墙滑行：separate 的推出向量就是障碍外法线，扣掉速度里朝障碍的分量。
@@ -600,14 +759,20 @@ export function applyGait(n, dt, moving, speed, mode = 'walk') {
   if (!running) groundFeet(n, dt);
 }
 
-function facePoint(n, x, z, dt) {
+function facePoint(n, x, z, dt, maxRate = 0) {
   const yaw = Math.atan2(x - n.pos.x, z - n.pos.z);
-  const dy = ((yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
-  n.group.rotation.y += dy * Math.min(1, dt * 9);
+  const dy = shortestAngle(yaw - n.group.rotation.y);
+  const step = Math.min(1, dt * 9) * dy;
+  // maxRate>0 时限制角速度（用于移动中平滑转身，避免瞬间掉头）
+  const applied = maxRate > 0 ? THREE.MathUtils.clamp(step, -maxRate * dt, maxRate * dt) : step;
+  n.group.rotation.y += applied;
+  return dy;
 }
 
 function interactionClip(n) {
-  return n.variant % 3 === 0 ? 'Man Clapping' : 'Man Standing';
+  // FBX 动画名是 Man_Clapping / Female_Clapping（下划线+性别前缀），
+  // switchClip 用 includes 匹配，故用性别无关的单词子串。
+  return n.variant % 3 === 0 ? 'Clapping' : 'Standing';
 }
 
 function updateKeeper(n, dt) {
@@ -645,6 +810,16 @@ function updateInteraction(n, dt) {
   return true;
 }
 
+// 统一设置目标：校正到可达点，并作废旧路径（目标变了必须重新规划）。
+function setTarget(n, x, z) {
+  const [px, pz] = reachablePoint(n, x, z);
+  n.target.set(px, 0, pz);
+  n.path = null;
+  n.pathGoal = null;
+  n.stallT = 0;
+  n.pushT = 0;
+}
+
 function advanceTarget(n) {
   if (n.itinerary) {
     // 流动人口的一次性行程：走到 exit 点后出城，不回到起点循环
@@ -653,31 +828,44 @@ function advanceTarget(n) {
     const idx = done ? 0 : n.routeIndex;
     const point = n.itinerary[idx];
     n.routeIndex = done ? 1 : n.routeIndex + 1;
-    n.target.set(point.x, 0, point.z);
+    setTarget(n, point.x, point.z);
     n.targetShopId = point.shopId || null;
     n.shopDoor = point.door || null;
     n.shopInside = point.inside || null;
     n.shopEntry = false;
     n.targetExit = !!(n.flow && point.exit);
   } else if (n.role === 'visitor') {
-    const point = VISIT_POINTS[n.routeIndex % VISIT_POINTS.length];
-    n.routeIndex = (n.routeIndex + 1) % VISIT_POINTS.length;
+    // 只挑可达的拜访点，避免反复选中墙角里的坐标导致原地挣扎。
+    const order = [];
+    for (let k = 0; k < VISIT_POINTS.length; k++) order.push((n.routeIndex + k) % VISIT_POINTS.length);
+    let point = null;
+    for (const idx of order) {
+      const p = VISIT_POINTS[idx];
+      const [rx, rz] = reachablePoint(n, p.customer.x, p.customer.z);
+      if (Math.hypot(rx - p.customer.x, rz - p.customer.z) < 2.2) { point = p; n.routeIndex = (idx + 1) % VISIT_POINTS.length; break; }
+    }
+    if (!point) { point = VISIT_POINTS[n.routeIndex % VISIT_POINTS.length]; n.routeIndex = (n.routeIndex + 1) % VISIT_POINTS.length; }
     const approach = point.door ? {
       x: point.customer.x + (Math.random() - 0.5) * 1.0,
       z: point.customer.z + (Math.random() - 0.5) * 1.4,
     } : point.customer;   // 水井/亭子没有店门，直接用原点和
-    n.target.set(approach.x, 0, approach.z);
+    setTarget(n, approach.x, approach.z);
     n.targetShopId = point.id;
     n.shopDoor = point.door || null;
     n.shopInside = point.inside || null;
     n.shopEntry = false;
   } else {
-    const a = Math.random() * Math.PI * 2;
-    const rr = Math.random() * n.radius;
-    let tx = n.home.x + Math.cos(a) * rr;
-    let tz = n.home.y + Math.sin(a) * rr;
-    [tx, tz] = clampTown(tx, tz);
-    if (!blocked(tx, tz)) n.target.set(tx, 0, tz);
+    // wander（动物/闲逛）：优先在开阔可行走区域取点，最多试 8 次
+    let tx = n.home.x, tz = n.home.y;
+    for (let t = 0; t < 8; t++) {
+      const a = Math.random() * Math.PI * 2;
+      const rr = 1.5 + Math.random() * Math.max(1, n.radius - 1.5);
+      const cx = n.home.x + Math.cos(a) * rr;
+      const cz = n.home.y + Math.sin(a) * rr;
+      const [px, pz] = clampTown(cx, cz, npcLimit(n));
+      if (!navBlocked(px, pz) && lineClear(n.pos.x, n.pos.z, px, pz)) { tx = px; tz = pz; break; }
+    }
+    setTarget(n, tx, tz);
   }
 }
 
@@ -758,7 +946,10 @@ export function updateNPCs(dt, nightAmount = 0) {
     n.waitT -= dt;
 
     // 绕行途中不触发到站（绕行点只是临时走向，行程目标保持不变）
-    if (n.waitT <= 0 && !n.detour && n.target.distanceTo(n.pos) < 0.85) {
+    // A* 路径耗尽且已靠近最后一个路点也算到达（门口点可能被网格膨胀微调过）
+    const nearTarget = n.target.distanceTo(n.pos) < 0.85 ||
+      (n.pathGoal && !n.path && Math.hypot(n.target.x - n.pos.x, n.target.z - n.pos.z) < 1.4);
+    if (n.waitT <= 0 && nearTarget) {
       // 流动人口到达城外消失点：短暂停留后回收进池等待补位
       if (n.targetExit) {
         if (n.exitHoldT == null) n.exitHoldT = randRange(FLOW_CFG.exitHold, 1.2);
@@ -773,13 +964,14 @@ export function updateNPCs(dt, nightAmount = 0) {
         continue;
       }
       if (n.targetShopId && n.shopDoor && n.shopInside && !n.shopEntry) {
-        // 第一段：站在街边候客点，接下来才走向店门（不再从候客点瞬移到门口）
+        // 第一段：站在街边候客点，接下来才走向店门。
+        // 店门坐标可能落在摊位 prop 的膨胀区里（物理上走不到），校正到
+        // 门口外侧最近可走点，作为「实际到达门口」的位置。
         n.shopEntry = true;
-        // 门口也做一点散布，避免多人同时抢同一个坐标排队卡死
-        n.target.set(
-          n.shopDoor.x, 0,
-          n.shopDoor.z + (Math.random() - 0.5) * 1.5,
-        );
+        const doorZ = n.shopDoor.z + (Math.random() - 0.5) * 1.0;
+        const [dx, dz] = reachablePoint(n, n.shopDoor.x, doorZ);
+        n.doorReached = new THREE.Vector3(dx, 0, dz);
+        setTarget(n, dx, dz);
         n.waitT = 0.05;
       } else {
         if (n.targetShopId && n.shopDoor && n.shopInside) {
@@ -788,11 +980,12 @@ export function updateNPCs(dt, nightAmount = 0) {
           n.shopVisitT = (VILLAGER_CFG.shopVisitTime || 2.2) + walk * 2;
           n.shopDoorDwell = walk;
           n.shopExitDwell = walk;
-          n.shopVisitDoor = n.shopDoor;
+          // 用「实际到达门口」的点做进店动画起点，不再瞬移到不可走的门坐标
+          n.shopVisitDoor = n.doorReached ? n.doorReached.clone() : new THREE.Vector3(n.shopDoor.x, 0, n.shopDoor.z);
           // 关键：此刻就快照屋内落点。下面的 advanceTarget 会把 n.shopInside
           // 改成下一家店，若进屋时再读就瞬移到几十米外，表现为「原地消失」。
           n.shopVisitInside = n.shopInside;
-          n.pos.set(n.shopDoor.x, 0, n.shopDoor.z);
+          n.pos.set(n.shopVisitDoor.x, 0, n.shopVisitDoor.z);
           if (n.group) {
             n.group.position.set(n.pos.x, 0, n.pos.z);
             n.group.visible = true;
@@ -807,43 +1000,51 @@ export function updateNPCs(dt, nightAmount = 0) {
       }
     }
 
-    // 绕行点生命周期：到达或超时即恢复原目标；短间隔防止角点间来回震荡
-    n.detourGap = Math.max(0, (n.detourGap || 0) - dt);
-    if (n.detour) {
-      n.detourT -= dt;
-      if (n.pos.distanceTo(n.detour) < 0.75 || n.detourT <= 0) {
-        n.detour = null;
-        n.detourGap = 0.4;
+    // ---- 导航目标：A* 路径点，直线可见时直接走目标 ----
+    // 进店阶段也要寻路：候客点→店门之间的摊位/灯柱会挡路，
+    // 旧的「跳过寻路直冲店门」正是 NPC 卡在门口的根因。
+    const goalChanged = !n.pathGoal ||
+      Math.abs(n.pathGoal[0] - n.target.x) > 0.05 || Math.abs(n.pathGoal[1] - n.target.z) > 0.05;
+    if (goalChanged) {
+      n.path = null; n.pathGoal = null;
+      if (!lineClear(n.pos.x, n.pos.z, n.target.x, n.target.z, n.shopEntry ? 0.3 : 0.5)) {
+        const planned = planPath(n.pos.x, n.pos.z, n.target.x, n.target.z);
+        if (planned && planned.length) { n.path = planned; n.pathGoal = [n.target.x, n.target.z]; }
       }
     }
-    const goal = n.detour || n.target;
-    tmp.copy(goal).sub(n.pos); tmp.y = 0;
-    const moveDist = tmp.length();
-    let desiredYaw = n.yaw;
-    if (moveDist > 0.4) {
-      tmp.normalize();
-      desiredYaw = Math.atan2(tmp.x, tmp.z);
-      const dy0 = ((desiredYaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
-      // 大角度转向也保留过半速度；旧值 0.15 会让 NPC 在障碍前几乎停住打转
-      const turnFactor = 0.5 + 0.5 * Math.max(0, 1 - Math.abs(dy0) / 1.6);
-      const sp = n.speed * (nightAmount > 0.5 ? 0.6 : 1) * turnFactor;
-      const k = Math.min(1, dt * 10);
-      n.vel.x += (tmp.x * sp - n.vel.x) * k;
-      n.vel.z += (tmp.z * sp - n.vel.z) * k;
-      n.yaw = desiredYaw;
-
-      // 提前绕开静态障碍，不要走到贴墙才靠逃脱重试。
-      // 进店的最后一段本来就要贴着房子走到门口，不能把它当障碍绕开。
-      if (!n.detour && n.detourGap <= 0 && !n.shopEntry && moveDist > 3) {
-        const hit = obstacleAhead(n.pos.x, n.pos.z, tmp.x, tmp.z, 2.6);
-        if (hit) {
-          const corner = detourAround(hit.c, n.pos.x, n.pos.z, goal.x, goal.z, tmp.x, tmp.z);
-          if (corner) {
-            n.detour = new THREE.Vector3(corner[0], 0, corner[1]);
-            n.detourT = 4;
-          }
-        }
+    // 消费已到达的路径点（视线捷径让队列通常只剩 1~2 点）
+    if (n.path && n.path.length) {
+      const head = n.path[0];
+      const next = n.path.length > 1 ? n.path[1] : n.target;
+      if (Math.hypot(head[0] - n.pos.x, head[1] - n.pos.z) < 0.85 ||
+          lineClear(n.pos.x, n.pos.z, next.x, next.z)) {
+        n.path.shift();
+        // 路径点消费完即置空，但保留 pathGoal 供「到站判定」识别已抵达，
+        // 直到 advanceTarget 换新目标时才由 setTarget 清除。
+        if (!n.path.length) n.path = null;
       }
+    }
+    const gx = n.path ? n.path[0][0] : n.target.x;
+    const gz = n.path ? n.path[0][1] : n.target.z;
+    tmp.set(gx - n.pos.x, 0, gz - n.pos.z);
+    const moveDist = tmp.length();
+    if (moveDist > 0.35) {
+      tmp.multiplyScalar(1 / moveDist);
+      const desiredYaw = Math.atan2(tmp.x, tmp.z);
+      // 身体朝向以有限角速度追向目标（不瞬移），大角度时先转身再加速，
+      // 速度始终沿"身体实际朝向"而不是目标方向 —— 消除横移/螃蟹步。
+      const dyaw = shortestAngle(desiredYaw - n.group.rotation.y);
+      const maxRate = 3.4;                       // rad/s，约 0.9s 完成 180° 转身
+      const turn = THREE.MathUtils.clamp(dyaw, -maxRate * dt, maxRate * dt);
+      n.group.rotation.y += turn;
+      n.yaw = n.group.rotation.y;
+      const aligned = Math.max(0.25, 1 - Math.abs(dyaw) / 1.5); // 转身时减速但不 absolute stop
+      const sp = n.speed * (nightAmount > 0.5 ? 0.6 : 1) * aligned;
+      // 用朝向的 forward 作为移动方向（three 中 +Z 为模型正面）
+      const fx = Math.sin(n.group.rotation.y), fz = Math.cos(n.group.rotation.y);
+      const k = Math.min(1, dt * 8);
+      n.vel.x += (fx * sp - n.vel.x) * k;
+      n.vel.z += (fz * sp - n.vel.z) * k;
     } else {
       n.vel.multiplyScalar(0.8);
     }
@@ -895,16 +1096,15 @@ export function updateNPCs(dt, nightAmount = 0) {
     [n.pos.x, n.pos.z] = clampTown(n.pos.x, n.pos.z, npcLimit(n));
 
     const moveX = n.pos.x - previousX, moveZ = n.pos.z - previousZ;
-    const rawSpeed = Math.hypot(moveX, moveZ) / Math.max(dt, 0.0001);
-    // EMA smoothing — physical speed jitter (collider pushes, crowding) must
-    // not feed straight into animation playback or the gait stutters
+    const realMove = Math.hypot(moveX, moveZ);          // 本帧真实位移（卡死判定用）
+    const rawSpeed = realMove / Math.max(dt, 0.0001);
+    // EMA smoothing 只用于动画播放速度，避免碰撞推挤造成的步态抖动
     n.smoothSpeed = (n.smoothSpeed ?? 0) + (rawSpeed - (n.smoothSpeed ?? 0)) * Math.min(1, dt * 6);
     const actualSpeed = n.smoothSpeed;
 
-    // hysteresis for facing updates only
     const nowMoving = n.locomotionMoving ? actualSpeed > 0.05 : actualSpeed > 0.12;
     n.locomotionMoving = nowMoving;
-    if (nowMoving) n.yaw = Math.atan2(moveX, moveZ);
+    // 注意：不再用位移方向覆盖 yaw。yaw 由身体朝向驱动，保证「朝哪走就朝哪看」。
 
     // ---- locomotion state machine ----
     // Clip switches are expensive (0.28s crossfade + restart). Requiring the
@@ -921,43 +1121,51 @@ export function updateNPCs(dt, nightAmount = 0) {
       n.locoTimer = 0;
     }
 
-    if (actualSpeed < 0.05 && moveDist > 0.6) {
-      n.stuckT = (n.stuckT || 0) + dt;
-      if (n.stuckT > 0.55) {
-        // 逃脱只设置临时侧向绕行点，绝不覆盖 itinerary 目标：
-        // 旧逻辑直接改 n.target，让 traveler/flow 丢失行程后反复重试。
-        if (n.detour) {
-          n.detour = null;   // 上一个绕行点无效，重选
-        } else {
-          const gx = n.target.x - n.pos.x, gz = n.target.z - n.pos.z;
-          const gl = Math.hypot(gx, gz) || 1;
-          const side = ((n.variant || 1) % 2) ? 1 : -1;
-          const rr = 2 + Math.random() * 1.4;
-          let ex = n.pos.x + (-gz / gl) * side * rr + (gx / gl) * 0.6;
-          let ez = n.pos.z + (gx / gl) * side * rr + (gz / gl) * 0.6;
-          [ex, ez] = clampTown(ex, ez, npcLimit(n));
-          if (!blocked(ex, ez, 0.6)) {
-            n.detour = new THREE.Vector3(ex, 0, ez);
-            n.detourT = 3;
+    // 卡死检测：基于真实位移（EMA 平滑速度会被碰撞推挤虚高，导致漏判）。
+    // 持续推力 pushT：脱离灯柱/摊位这类小障碍需要好几帧侧向力，单次推力无效。
+    n.pushT = Math.max(0, (n.pushT || 0) - dt);
+    if (n.pushT > 0 && n.pushDir) {
+      n.vel.x += n.pushDir[0] * n.speed * dt * 3.2;
+      n.vel.z += n.pushDir[1] * n.speed * dt * 3.2;
+    }
+    // waitT>0 是主动停留（拜访/候客/进店），不算卡死
+    if (realMove < dt * 0.14 && moveDist > 0.9 && n.waitT <= 0) {
+      n.stallT = (n.stallT || 0) + dt;
+      if (n.stallT > 0.9) {
+        n.stallT = 0;
+        n.path = null; n.pathGoal = null;
+        const gx0 = n.target.x - n.pos.x, gz0 = n.target.z - n.pos.z;
+        const gl0 = Math.hypot(gx0, gz0) || 1;
+        // 选一个自由侧向作为持续脱困方向，施加 0.7 秒
+        let pushed = false;
+        for (const side of [1, -1]) {
+          const ex = n.pos.x + (-gz0 / gl0) * side * 1.6;
+          const ez = n.pos.z + (gx0 / gl0) * side * 1.6;
+          if (!navBlocked(ex, ez, 0.45)) {
+            n.pushDir = [-gz0 / gl0 * side, gx0 / gl0 * side];
+            n.pushT = 0.7;
+            pushed = true;
+            break;
           }
         }
-        n.waitT = 0.15;
-        n.vel.set(0, 0, 0);
-        n.stuckT = 0;
+        // 目标本身在墙里：强制校正到可达点
+        if (navBlocked(n.target.x, n.target.z)) {
+          const [rx, rz] = reachablePoint(n, n.target.x, n.target.z);
+          setTarget(n, rx, rz);
+        } else if (!lineClear(n.pos.x, n.pos.z, n.target.x, n.target.z, 0.5)) {
+          const planned = planPath(n.pos.x, n.pos.z, n.target.x, n.target.z);
+          if (planned && planned.length) { n.path = planned; n.pathGoal = [n.target.x, n.target.z]; }
+          else if (!pushed) setTarget(n, n.home.x, n.home.y);
+        }
+        n.waitT = Math.max(n.waitT, 0.1);
       }
     } else {
-      n.stuckT = 0;
+      n.stallT = 0;
     }
 
     n.group.position.x = n.pos.x;
     n.group.position.z = n.pos.z;
-    const dy = ((n.yaw - n.group.rotation.y + Math.PI) % (Math.PI * 2)) - Math.PI;
-    // only snap instantly for near-opposite turns; small corrections ease out
-    if (Math.abs(dy) > 1.8) {
-      n.group.rotation.y = n.yaw;
-    } else {
-      n.group.rotation.y += dy * Math.min(1, dt * 18);
-    }
+    // yaw 已由导航段同步为 body facing；此处仅在交互/进店等外部改过朝向时兜底。
 
     if (n.locoState === 'walk') {
       const naturalSpeed = n.type === 'villager' ? 1.3 : 0.55;
