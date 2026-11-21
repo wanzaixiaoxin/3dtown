@@ -823,6 +823,7 @@ export const gaitTuning = {
   arm: 0.34,          // 手臂前后摆幅(rad)
   elbow: 0.16,        // 手肘恒定微屈(rad)
   adduction: 0.055,   // 髋内收：让双脚向身体中线靠拢，纠正模型本身的O型站姿(rad)
+  footDrop: 0.30,     // 走路时脚掌比脚踝低约 0.3m，抬高脚踝贴地基准以免脚掌陷进地面(m)
   armLength: 0.88,    // 手臂长度系数：模型手臂偏长，缩短后手垂到胯部而非膝盖
   handScale: 0.85,    // 手掌等比缩放：模型手掌偏大
   bob: 0.018,         // 髋部上下起伏(m)
@@ -920,11 +921,16 @@ function applyHumanGait(n, dt, w, speed) {
 
 const _footPosition = new THREE.Vector3();
 function groundFeet(n, dt) {
+  // 走路姿态下屈膝+脚踝旋转会让脚掌明显低于脚踝骨；贴地基准是脚踝骨，
+  // 因此按 walkBlend 抬高目标脚踝高度，抵消脚掌下沉，避免整只脚陷进地面。
+  // 静止(walkBlend=0)时不补偿，脚掌本就贴地。
+  const footLift = n.type === 'villager'
+    ? gaitTuning.footDrop * (n.walkBlend || 0) : 0;
   let lowestOffset = Infinity;
   for (const name in n.footRestY) {
     const bone = n.bones[name];
     if (!bone) continue;
-    const offset = bone.getWorldPosition(_footPosition).y - n.footRestY[name];
+    const offset = bone.getWorldPosition(_footPosition).y - (n.footRestY[name] + footLift);
     lowestOffset = Math.min(lowestOffset, offset);
   }
   if (!Number.isFinite(lowestOffset)) return;
