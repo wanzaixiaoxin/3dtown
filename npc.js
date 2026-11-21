@@ -398,7 +398,11 @@ function updateFlowSpawner(dt) {
 }
 
 export function createGaitState(instance, type) {
-  const state = { group: instance, type, size: instance.userData.size, bones: {}, rest: {}, pitchAxes: {}, footRestScale: {}, footRestY: {} };
+  const state = {
+    group: instance, type, size: instance.userData.size,
+    bones: {}, rest: {}, fullRest: {}, poseSample: {}, poseBlend: {},
+    pitchAxes: {}, footRestScale: {}, footRestY: {},
+  };
   instance.traverse((o) => { if (o.isBone) state.bones[o.name] = o; });
   const animatedBones = ['UpperLegL','UpperLegR','LowerLegL','LowerLegR','FootL','FootR','UpperArmL','UpperArmR',
     'FrontUpLegL','FrontUpLegR','FrontLowLegL','FrontLowLegR','FrontFootL','FrontFootR',
@@ -423,6 +427,13 @@ export function createGaitState(instance, type) {
       state.rest[name].copy(foot.quaternion);
     }
     instance.updateMatrixWorld(true);
+  }
+  // 人类步态会手动采样动画轨道，因此需要全体骨骼的绑定姿态作为兜底。
+  for (const name in state.bones) {
+    const bone = state.bones[name];
+    state.fullRest[name] = { q: bone.quaternion.clone(), p: bone.position.clone() };
+    state.poseSample[name] = { q: new THREE.Quaternion(), p: new THREE.Vector3(), hasQ: false, hasP: false };
+    state.poseBlend[name] = { q: new THREE.Quaternion(), p: new THREE.Vector3(), hasQ: false, hasP: false };
   }
   for (const name of animatedBones) {
     state.pitchAxes[name] = computePitchAxis(instance, state.bones[name]);
@@ -500,13 +511,19 @@ function switchClip(npc, clipName, speed = 1, dt = 0) {
     npc.curAction.timeScale += (speed - npc.curAction.timeScale) * t;
     return;
   }
+  const prev = npc.curAction;
   const action = npc.mixer.clipAction(clip);
   action.reset();
   action.setLoop(THREE.LoopRepeat, Infinity);
   action.timeScale = speed;
   action.fadeIn(0.28).play();
-  if (npc.curAction) npc.curAction.fadeOut(0.28);
+  if (prev) prev.fadeOut(0.28);
   npc.curAction = action;
+  // 人类步态手动采样动画轨道，自己维护一段短交叉淡入淡出。
+  if (npc.type === 'villager' && prev && prev.getClip() !== clip) {
+    npc.prevAction = prev;
+    npc.clipFadeT = 0;
+  }
 }
 
 // Proper obstacle avoidance: push the proposed position out of any collider
@@ -678,13 +695,203 @@ function computePitchAxis(root, bone) {
   return new THREE.Vector3(1, 0, 0).applyQuaternion(rootQ).applyQuaternion(boneQ.invert()).normalize();
 }
 
-// Procedural walk cycle overlay: the FBX walk clips have very small leg swing,
-// so we drive thighs/shins/arms directly to get a readable, non-sliding gait.
+// 四足动物的动画片段腿部动作不足，仍使用程序化步态补全。
 function poseQuadrupedLeg(n, upper, lower, foot, upperAngle, flexion, hind = false) {
   const lowerAngle = hind ? -flexion : flexion;
   poseBoneAxis(n.bones, n.rest, upper, n.pitchAxes[upper], upperAngle);
   poseBoneAxis(n.bones, n.rest, lower, n.pitchAxes[lower], lowerAngle);
   poseBoneAxis(n.bones, n.rest, foot, n.pitchAxes[foot], -(upperAngle + lowerAngle) * 0.85);
+}
+
+const WORLD_SIDE = new THREE.Vector3(1, 0, 0);
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+const WORLD_FORWARD = new THREE.Vector3(0, 0, 1);
+const _qRoot = new THREE.Quaternion();
+const _qBone = new THREE.Quaternion();
+const _axis = new THREE.Vector3();
+const _deltaQ = new THREE.Quaternion();
+const _footWorld = new THREE.Vector3();
+const _qa = new THREE.Quaternion();
+const _qb = new THREE.Quaternion();
+const _va = new THREE.Vector3();
+const _vb = new THREE.Vector3();
+const CLIP_FADE = 0.28;
+
+function resetPose(pose) {
+  for (const name in pose) { pose[name].hasQ = false; pose[name].hasP = false; }
+}
+
+function sampleTrack(track, time, out) {
+  const times = track.times;
+  const size = out.isQuaternion ? 4 : 3;
+  if (!times.length) return false;
+  if (times.length === 1 || time <= times[0]) {
+    out.fromArray(track.values, 0);
+    if (out.isQuaternion) out.normalize();
+    return true;
+  }
+  for (let i = 1; i < times.length; i++) {
+    if (time > times[i]) continue;
+    const span = times[i] - times[i - 1] || 1;
+    const t = THREE.MathUtils.clamp((time - times[i - 1]) / span, 0, 1);
+    if (out.isQuaternion) {
+      _qa.fromArray(track.values, (i - 1) * size).normalize();
+      _qb.fromArray(track.values, i * size).normalize();
+      out.copy(_qa).slerp(_qb, t);
+    } else {
+      _va.fromArray(track.values, (i - 1) * size);
+      _vb.fromArray(track.values, i * size);
+      out.lerpVectors(_va, _vb, t);
+    }
+    return true;
+  }
+  out.fromArray(track.values, (times.length - 1) * size);
+  if (out.isQuaternion) out.normalize();
+  return true;
+}
+
+function sampleClipInto(clip, time, pose) {
+  if (!clip) return;
+  const t = ((time % clip.duration) + clip.duration) % clip.duration;
+  for (const track of clip.tracks) {
+    const dot = track.name.indexOf('.');
+    if (dot < 0) continue;
+    const entry = pose[track.name.slice(0, dot)];
+    if (!entry) continue;
+    if (track.name.endsWith('.quaternion')) {
+      if (sampleTrack(track, t, _qa)) { entry.q.copy(_qa); entry.hasQ = true; }
+    } else if (track.name.endsWith('.position')) {
+      if (sampleTrack(track, t, _va)) { entry.p.copy(_va); entry.hasP = true; }
+    }
+  }
+}
+
+function blendPose(n, target, other, otherWeight) {
+  for (const name in target) {
+    const a = target[name], b = other[name], rest = n.fullRest[name];
+    if (!b || !rest) continue;
+    if (b.hasQ) {
+      if (a.hasQ) a.q.slerp(b.q, otherWeight);
+      else { a.q.copy(rest.q).slerp(b.q, otherWeight); a.hasQ = true; }
+    } else if (a.hasQ) {
+      a.q.slerp(rest.q, otherWeight);
+    }
+    if (b.hasP) {
+      if (a.hasP) a.p.lerp(b.p, otherWeight);
+      else { a.p.copy(rest.p).lerp(b.p, otherWeight); a.hasP = true; }
+    } else if (a.hasP) {
+      a.p.lerp(rest.p, otherWeight);
+    }
+  }
+}
+
+function applySampledPose(n, pose) {
+  for (const name in n.bones) {
+    const bone = n.bones[name], rest = n.fullRest[name], entry = pose[name];
+    if (!bone || !rest || !entry) continue;
+    bone.quaternion.copy(entry.hasQ ? entry.q : rest.q);
+    bone.position.copy(entry.hasP ? entry.p : rest.p);
+  }
+}
+
+// 角色朝向会变；每帧按根节点的当前世界朝向把世界轴换算到骨骼局部空间。
+function boneAxisInLocal(n, bone, worldAxis) {
+  n.group.getWorldQuaternion(_qRoot);
+  bone.getWorldQuaternion(_qBone);
+  return _axis.copy(worldAxis).applyQuaternion(_qRoot).applyQuaternion(_qBone.invert()).normalize();
+}
+
+function rotateBone(n, name, worldAxis, angle) {
+  if (!angle) return;
+  const bone = n.bones[name];
+  if (!bone) return;
+  const axis = boneAxisInLocal(n, bone, worldAxis);
+  bone.quaternion.multiply(_qTmp.setFromAxisAngle(axis, angle));
+}
+
+// 取当前动画姿态相对绑定姿态的带符号转角，用于保持脚掌随大腿摆动自然回正。
+function restAngle(n, name) {
+  const base = n.poseSample[name] && n.poseSample[name].q;
+  const rest = n.fullRest[name] && n.fullRest[name].q;
+  if (!base || !rest) return 0;
+  _deltaQ.copy(rest).invert().multiply(base).normalize();
+  const vecLen = Math.hypot(_deltaQ.x, _deltaQ.y, _deltaQ.z);
+  if (vecLen < 1e-5) return 0;
+  const axis = n.pitchAxes[name];
+  const sign = axis
+    ? Math.sign(_deltaQ.x * axis.x + _deltaQ.y * axis.y + _deltaQ.z * axis.z) || 1
+    : 1;
+  return shortestAngle(2 * Math.atan2(vecLen, _deltaQ.w) * sign);
+}
+
+function footLift(n, name) {
+  const foot = n.bones[name];
+  const restY = n.footRestY[name];
+  if (!foot || restY === undefined) return 0;
+  const y = foot.getWorldPosition(_footWorld).y;
+  return THREE.MathUtils.clamp((y - n.group.position.y - restY) / 0.34, 0, 1);
+}
+
+// 人类行走：手动采样 FBX 轨道，保留原动画的跨步与摆臂，再补上膝盖弯曲、
+// 脚掌滚动、重心转移和躯干/头部补偿。不依赖 AnimationMixer 是否写回骨骼。
+function applyHumanGait(n, dt, w, speed) {
+  const cur = n.curAction;
+  const clip = cur && cur.getClip ? cur.getClip() : null;
+  const pose = n.poseSample;
+  resetPose(pose);
+  if (cur && clip) sampleClipInto(clip, cur.time, pose);
+  if (n.prevAction && (n.clipFadeT || 0) < CLIP_FADE) {
+    resetPose(n.poseBlend);
+    const prev = n.prevAction;
+    sampleClipInto(prev.getClip ? prev.getClip() : null, prev.time, n.poseBlend);
+    blendPose(n, pose, n.poseBlend, 1 - (n.clipFadeT || 0) / CLIP_FADE);
+  }
+  n.clipFadeT = (n.clipFadeT || 0) + dt;
+  if (n.clipFadeT >= CLIP_FADE) n.prevAction = null;
+  applySampledPose(n, pose);
+  // FBX 原始走姿步幅偏大，略向绑定姿态回收，保留节奏但更像日常散步。
+  for (const name of ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'UpperArmL', 'UpperArmR', 'LowerArmL', 'LowerArmR']) {
+    const bone = n.bones[name], rest = n.fullRest[name];
+    if (bone && rest) bone.quaternion.slerp(rest.q, 0.28);
+  }
+  n.group.updateMatrixWorld(true);
+
+  let ph;
+  if (clip && /walk/i.test(clip.name) && cur) {
+    ph = (cur.time / clip.duration) * Math.PI * 2;
+    n.walkPhase = ph;
+  } else {
+    n.walkPhase += dt * (2.4 + speed * 2.2);
+    ph = n.walkPhase;
+  }
+  if (w < 0.01) { groundFeet(n, dt); return; }
+
+  // 抬脚越高，膝盖越弯；与动画片段本身的步态相位天然对齐。
+  const liftL = THREE.MathUtils.clamp((footLift(n, 'FootL') - 0.08) / 0.34, 0, 1);
+  const liftR = THREE.MathUtils.clamp((footLift(n, 'FootR') - 0.08) / 0.34, 0, 1);
+  const thighL = restAngle(n, 'UpperLegL');
+  const thighR = restAngle(n, 'UpperLegR');
+  rotateBone(n, 'LowerLegL', WORLD_SIDE, liftL * 0.35 * w);
+  rotateBone(n, 'LowerLegR', WORLD_SIDE, liftR * 0.35 * w);
+  rotateBone(n, 'FootL', WORLD_SIDE, (-thighL * 0.45 - liftL * 0.1) * w);
+  rotateBone(n, 'FootR', WORLD_SIDE, (-thighR * 0.45 - liftR * 0.1) * w);
+
+  // 两步一个重心周期：髋部轻微起伏与侧移，肩/头反向补偿。
+  const sway = Math.sin(ph);
+  const bob = Math.cos(ph * 2);
+  if (n.bones.Hips && n.fullRest.Hips) {
+    const hipEntry = n.poseSample.Hips;
+    const base = hipEntry && hipEntry.hasP ? hipEntry.p : n.fullRest.Hips.p;
+    n.bones.Hips.position.set(base.x + sway * 0.016 * w, base.y + bob * 0.012 * w, base.z);
+  }
+  rotateBone(n, 'Hips', WORLD_UP, sway * 0.055 * w);
+  rotateBone(n, 'Hips', WORLD_FORWARD, -sway * 0.028 * w);
+  rotateBone(n, 'Torso', WORLD_UP, -sway * 0.04 * w);
+  rotateBone(n, 'Torso', WORLD_FORWARD, sway * 0.035 * w);
+  rotateBone(n, 'Head', WORLD_UP, sway * 0.018 * w);
+  rotateBone(n, 'Head', WORLD_SIDE, -bob * 0.015 * w);
+
+  groundFeet(n, dt);
 }
 
 const _footPosition = new THREE.Vector3();
@@ -714,6 +921,13 @@ export function applyGait(n, dt, moving, speed, mode = 'walk') {
     if (!n.footRestScale) return;
     for (const nm in n.footRestScale) n.bones[nm].scale.copy(n.footRestScale[nm]);
   };
+
+  if (isVillager) {
+    applyHumanGait(n, dt, w, speed);
+    restoreFootScale();
+    return;
+  }
+
   if (w < 0.01) {
     // restore rest pose when idle
     for (const name in n.rest) n.bones[name].quaternion.copy(n.rest[name]);
@@ -724,33 +938,13 @@ export function applyGait(n, dt, moving, speed, mode = 'walk') {
   }
 
   // Match stride frequency to actual speed and the animal's leg scale.
-  const walkRate = isVillager ? 2.6 + speed * 3.4 : 1.8 + speed * 4.0 / (n.size?.y || 1);
+  const walkRate = 1.8 + speed * 4.0 / (n.size?.y || 1);
   n.walkPhase += dt * (running ? 6.4 + speed * 1.8 : walkRate);
   const ph = n.walkPhase;
   const sw = Math.sin(ph);
   const swOpp = Math.sin(ph + Math.PI);
 
-  if (isVillager) {
-    const thighAmp = 0.26;
-    const thighL = sw * thighAmp * w;
-    const thighR = swOpp * thighAmp * w;
-    poseBoneAxis(n.bones, n.rest, 'UpperLegL', n.pitchAxes['UpperLegL'], thighL);
-    poseBoneAxis(n.bones, n.rest, 'UpperLegR', n.pitchAxes['UpperLegR'], thighR);
-    // Flex only the leg swinging forward; the supporting leg stays extended.
-    const kneeL = Math.max(0, -Math.cos(ph)) * 0.9 * w;
-    const kneeR = Math.max(0, -Math.cos(ph + Math.PI)) * 0.9 * w;
-    poseBoneAxis(n.bones, n.rest, 'LowerLegL', n.pitchAxes['LowerLegL'], kneeL);
-    poseBoneAxis(n.bones, n.rest, 'LowerLegR', n.pitchAxes['LowerLegR'], kneeR);
-    // Reset from rest every frame and counter-rotate the ankle to keep soles level.
-    poseBoneAxis(n.bones, n.rest, 'FootL', n.pitchAxes['FootL'], -(thighL + kneeL) * 0.85);
-    poseBoneAxis(n.bones, n.rest, 'FootR', n.pitchAxes['FootR'], -(thighR + kneeR) * 0.85);
-    // arms swing opposite to the legs
-    poseBoneAxis(n.bones, n.rest, 'UpperArmL', n.pitchAxes['UpperArmL'], swOpp * 0.30 * w);
-    poseBoneAxis(n.bones, n.rest, 'UpperArmR', n.pitchAxes['UpperArmR'], sw * 0.30 * w);
-    // Lower the pelvis slightly at full stride instead of lifting both feet.
-    n.group.position.y = -Math.abs(sw) * 0.018 * w;
-    restoreFootScale();
-  } else if (running) {
+  if (running) {
     const frontPhaseL = ph;
     const frontPhaseR = ph + 0.28;
     const backPhaseL = ph + Math.PI + 0.55;
