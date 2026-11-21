@@ -282,6 +282,29 @@ function reachablePoint(n, x, z) {
   return spiral(true) || spiral(false) || [n.home.x, n.home.y];
 }
 
+// 进店终点：从门口朝屋内方向步进，停在柜台/墙体等障碍的近侧前方。
+// 顾客走到柜台前即视为「进店」并隐去，避免直线插值穿过柜台/房子。
+function entryStopPoint(door, inside) {
+  const dx = inside.x - door.x, dz = inside.z - door.z;
+  const d = Math.hypot(dx, dz);
+  if (d < 0.01) return { x: door.x, z: door.z };
+  const ux = dx / d, uz = dz / d;
+  const step = 0.1;
+  // 用接近人物实际半宽的膨胀找障碍本体，避免用大膨胀把门口外就判成阻挡、
+  // 导致顾客离柜台/门洞老远就消失。
+  const pad = 0.32;
+  for (let t = 0; t <= d; t += step) {
+    const px = door.x + ux * t, pz = door.z + uz * t;
+    if (navBlocked(px, pz, pad)) {
+      // 退回障碍前一点，留一点余量避免贴着柜台
+      const back = Math.max(0, t - 0.18);
+      return { x: door.x + ux * back, z: door.z + uz * back };
+    }
+  }
+  // 整条路都没障碍，退回门口附近（不该发生：屋内落点通常在建筑里）
+  return { x: door.x + ux * Math.min(d, 0.6), z: door.z + uz * Math.min(d, 0.6) };
+}
+
 // 顶墙时找一个「先离开障碍」的临时落脚点：必须当前可见、自身可站，
 // 并尽量让后续到目标的视线通畅。用于脱困时替代纯侧向推力。
 function escapePoint(x0, z0, gx, gz) {
@@ -824,6 +847,7 @@ export const gaitTuning = {
   elbow: 0.16,        // 手肘恒定微屈(rad)
   adduction: 0.055,   // 髋内收：让双脚向身体中线靠拢，纠正模型本身的O型站姿(rad)
   footDrop: 0.30,     // 走路时脚掌比脚踝低约 0.3m，抬高脚踝贴地基准以免脚掌陷进地面(m)
+  legStand: 1.0,      // 待机时把腿拉回直立姿态的比例：部分 FBX Standing 动画是下蹲(膝98°)，会看起来像跪着
   armLength: 0.88,    // 手臂长度系数：模型手臂偏长，缩短后手垂到胯部而非膝盖
   handScale: 0.85,    // 手掌等比缩放：模型手掌偏大
   bob: 0.018,         // 髋部上下起伏(m)
@@ -865,6 +889,16 @@ function applyHumanGait(n, dt, w, speed) {
   n.clipFadeT = (n.clipFadeT || 0) + dt;
   if (n.clipFadeT >= CLIP_FADE) n.prevAction = null;
   applySampledPose(n, pose);
+
+  // 部分 FBX 待机动画（Standing/Clapping）自带下蹲姿态（膝盖弯到 ~98°），
+  // 直接播放会让 NPC 看起来跪着、下沉 0.4m，切到 Walk 又突然站起来。
+  // 因此无论待机还是走路，都先把腿骨拉回绑定的直立姿态；上肢手势仍保留 FBX 动画。
+  if (P.legStand > 0) {
+    for (const name of ['UpperLegL','UpperLegR','LowerLegL','LowerLegR','FootL','FootR']) {
+      const bone = n.bones[name], rest = n.fullRest[name];
+      if (bone && rest) bone.quaternion.slerp(rest.q, P.legStand);
+    }
+  }
 
   if (w < 0.01) { n.group.updateMatrixWorld(true); groundFeet(n, dt); return; }
 
@@ -1157,7 +1191,7 @@ export function updateNPCs(dt, nightAmount = 0) {
             // 匀速走完门洞距离，而不是站定后瞬间消失
             const step = Math.min(d, d / Math.max(n.shopDoorDwell, dt) * dt);
             n.pos.x += dx / d * step; n.pos.z += dz / d * step;
-            if (n.group) n.group.position.set(n.pos.x, 0, n.pos.z);
+            if (n.group) n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
             switchClip(n, n.walkClip, 0.9, dt);
             applyGait(n, dt, true, n.speed);
           }
@@ -1165,7 +1199,7 @@ export function updateNPCs(dt, nightAmount = 0) {
         if (n.shopDoorDwell <= 0 && n.shopVisitInside) {
           n.pos.set(n.shopVisitInside.x, 0, n.shopVisitInside.z);
           if (n.group) {
-            n.group.position.set(n.pos.x, 0, n.pos.z);
+            n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
             n.group.visible = false;   // 走进门之后才隐藏
           }
         }
@@ -1173,7 +1207,7 @@ export function updateNPCs(dt, nightAmount = 0) {
         // 出门：先在屋内现身，再平滑走回门口（不在门口凭空冒出）
         if (n.group && !n.group.visible) {
           if (n.shopVisitInside) n.pos.set(n.shopVisitInside.x, 0, n.shopVisitInside.z);
-          n.group.position.set(n.pos.x, 0, n.pos.z);
+          n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
           n.group.visible = true;
         }
         n.shopExitDwell -= dt;
@@ -1183,7 +1217,7 @@ export function updateNPCs(dt, nightAmount = 0) {
         if (d > 0.05) {
           const step = Math.min(d, d / Math.max(n.shopExitDwell, dt) * dt);
           n.pos.x += dx / d * step; n.pos.z += dz / d * step;
-          if (n.group) n.group.position.set(n.pos.x, 0, n.pos.z);
+          if (n.group) n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
           switchClip(n, n.walkClip, 0.9, dt);
           applyGait(n, dt, true, n.speed);
         }
@@ -1194,7 +1228,7 @@ export function updateNPCs(dt, nightAmount = 0) {
       if (n.shopVisitT <= 0) {
         if (n.shopVisitDoor) {
           n.pos.set(n.shopVisitDoor.x, 0, n.shopVisitDoor.z);
-          if (n.group) n.group.position.set(n.pos.x, 0, n.pos.z);
+          if (n.group) n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
         }
         if (n.group) n.group.visible = true;
         n.shopVisitT = 0;
@@ -1243,10 +1277,11 @@ export function updateNPCs(dt, nightAmount = 0) {
           n.shopVisitDoor = n.doorReached ? n.doorReached.clone() : new THREE.Vector3(n.shopDoor.x, 0, n.shopDoor.z);
           // 关键：此刻就快照屋内落点。下面的 advanceTarget 会把 n.shopInside
           // 改成下一家店，若进屋时再读就瞬移到几十米外，表现为「原地消失」。
-          n.shopVisitInside = n.shopInside;
-          // 个别店铺的屋内落点离门口达 5m+，作为门洞过渡起点太远，出店时
-          // 会表现为一段快速滑行。钳制到门口朝内 MAX_DOOR_WALK 米内，
-          // 作为「从屋内走出」的动画起点。
+          // 屋内落点通常落在柜台/房子 collider 里，直接走进去会穿过柜台；
+          // 用 entryStopPoint 把它钳制到柜台前的安全点：走到柜台前即隐去。
+          const stop = entryStopPoint(n.shopVisitDoor, n.shopInside);
+          n.shopVisitInside = new THREE.Vector3(stop.x, 0, stop.z);
+          // 兜底：个别店铺柜台前距离仍偏长，钳制到门口朝内 MAX_DOOR_WALK 米内。
           const MAX_DOOR_WALK = 3.0;
           let doorD = Math.hypot(n.shopVisitInside.x - n.shopVisitDoor.x, n.shopVisitInside.z - n.shopVisitDoor.z);
           if (doorD > MAX_DOOR_WALK && doorD > 0.01) {
@@ -1258,13 +1293,13 @@ export function updateNPCs(dt, nightAmount = 0) {
           // 门洞距离÷正常步速决定进出店耗时。原来固定 0.85s 走完 ~2.5m 门洞，
           // 实际速度约 3m/s（步速的 3 倍），表现为出店后一段快速滑行。
           const walkSpeed = Math.max(0.4, n.speed || 0.9);
-          const walk = THREE.MathUtils.clamp(doorD / walkSpeed, 0.6, 6);
+          const walk = THREE.MathUtils.clamp(doorD / walkSpeed, 0.5, 4);
           n.shopVisitT = (VILLAGER_CFG.shopVisitTime || 2.2) + walk * 2;
           n.shopDoorDwell = walk;
           n.shopExitDwell = walk;
           n.pos.set(n.shopVisitDoor.x, 0, n.shopVisitDoor.z);
           if (n.group) {
-            n.group.position.set(n.pos.x, 0, n.pos.z);
+            n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
             n.group.visible = true;
           }
         }
