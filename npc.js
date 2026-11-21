@@ -1227,15 +1227,29 @@ export function updateNPCs(dt, nightAmount = 0) {
       } else {
         if (n.targetShopId && n.shopDoor && n.shopInside) {
           // 第二段：到达店门口，平滑走进屋内再隐去（不是站定后瞬间消失）
-          const walk = Math.max(0.3, VILLAGER_CFG.doorWalkTime ?? 1.15);
-          n.shopVisitT = (VILLAGER_CFG.shopVisitTime || 2.2) + walk * 2;
-          n.shopDoorDwell = walk;
-          n.shopExitDwell = walk;
           // 用「实际到达门口」的点做进店动画起点，不再瞬移到不可走的门坐标
           n.shopVisitDoor = n.doorReached ? n.doorReached.clone() : new THREE.Vector3(n.shopDoor.x, 0, n.shopDoor.z);
           // 关键：此刻就快照屋内落点。下面的 advanceTarget 会把 n.shopInside
           // 改成下一家店，若进屋时再读就瞬移到几十米外，表现为「原地消失」。
           n.shopVisitInside = n.shopInside;
+          // 个别店铺的屋内落点离门口达 5m+，作为门洞过渡起点太远，出店时
+          // 会表现为一段快速滑行。钳制到门口朝内 MAX_DOOR_WALK 米内，
+          // 作为「从屋内走出」的动画起点。
+          const MAX_DOOR_WALK = 3.0;
+          let doorD = Math.hypot(n.shopVisitInside.x - n.shopVisitDoor.x, n.shopVisitInside.z - n.shopVisitDoor.z);
+          if (doorD > MAX_DOOR_WALK && doorD > 0.01) {
+            const ux = (n.shopVisitInside.x - n.shopVisitDoor.x) / doorD;
+            const uz = (n.shopVisitInside.z - n.shopVisitDoor.z) / doorD;
+            n.shopVisitInside = new THREE.Vector3(n.shopVisitDoor.x + ux * MAX_DOOR_WALK, 0, n.shopVisitDoor.z + uz * MAX_DOOR_WALK);
+            doorD = MAX_DOOR_WALK;
+          }
+          // 门洞距离÷正常步速决定进出店耗时。原来固定 0.85s 走完 ~2.5m 门洞，
+          // 实际速度约 3m/s（步速的 3 倍），表现为出店后一段快速滑行。
+          const walkSpeed = Math.max(0.4, n.speed || 0.9);
+          const walk = THREE.MathUtils.clamp(doorD / walkSpeed, 0.6, 6);
+          n.shopVisitT = (VILLAGER_CFG.shopVisitTime || 2.2) + walk * 2;
+          n.shopDoorDwell = walk;
+          n.shopExitDwell = walk;
           n.pos.set(n.shopVisitDoor.x, 0, n.shopVisitDoor.z);
           if (n.group) {
             n.group.position.set(n.pos.x, 0, n.pos.z);
