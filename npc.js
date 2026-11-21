@@ -705,12 +705,9 @@ function poseQuadrupedLeg(n, upper, lower, foot, upperAngle, flexion, hind = fal
 
 const WORLD_SIDE = new THREE.Vector3(1, 0, 0);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
-const WORLD_FORWARD = new THREE.Vector3(0, 0, 1);
 const _qRoot = new THREE.Quaternion();
 const _qBone = new THREE.Quaternion();
 const _axis = new THREE.Vector3();
-const _deltaQ = new THREE.Quaternion();
-const _footWorld = new THREE.Vector3();
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
 const _va = new THREE.Vector3();
@@ -809,35 +806,29 @@ function rotateBone(n, name, worldAxis, angle) {
   bone.quaternion.multiply(_qTmp.setFromAxisAngle(axis, angle));
 }
 
-// 取当前动画姿态相对绑定姿态的带符号转角，用于保持脚掌随大腿摆动自然回正。
-function restAngle(n, name) {
-  const base = n.poseSample[name] && n.poseSample[name].q;
-  const rest = n.fullRest[name] && n.fullRest[name].q;
-  if (!base || !rest) return 0;
-  _deltaQ.copy(rest).invert().multiply(base).normalize();
-  const vecLen = Math.hypot(_deltaQ.x, _deltaQ.y, _deltaQ.z);
-  if (vecLen < 1e-5) return 0;
-  const axis = n.pitchAxes[name];
-  const sign = axis
-    ? Math.sign(_deltaQ.x * axis.x + _deltaQ.y * axis.y + _deltaQ.z * axis.z) || 1
-    : 1;
-  return shortestAngle(2 * Math.atan2(vecLen, _deltaQ.w) * sign);
-}
+// 人类步态参数。FBX 自带的 Female_Walk 是前倾大跨步的疾走姿态，不适合当散步；
+// 这里在待机/互动时仍播放 FBX 动画，走路时平滑过渡到一套完全可控的程序化步态。
+// 参数集中在 gaitTuning 上，方便在浏览器里逐帧对照调整。
+export const gaitTuning = {
+  toRest: 1.0,        // 走姿从 FBX 动画姿态收回绑定姿态的比例
+  stride: 0.32,       // 大腿前后摆幅(rad)
+  knee: 0.75,         // 摆动腿膝盖弯曲(rad)
+  ankle: 0.92,        // 脚踝跟随大腿+小腿、保持脚掌接近水平的系数
+  arm: 0.34,          // 手臂前后摆幅(rad)
+  elbow: 0.16,        // 手肘恒定微屈(rad)
+  bob: 0.018,         // 髋部上下起伏(m)
+  sway: 0.016,        // 髋部左右摇摆(m)
+  counter: 0.05,      // 躯干/头部反向旋转(rad)
+  freqBase: 2.2,      // 步频基数(rad/s)
+  freqSpeed: 2.6,     // 步频随速度系数
+};
 
-function footLift(n, name) {
-  const foot = n.bones[name];
-  const restY = n.footRestY[name];
-  if (!foot || restY === undefined) return 0;
-  const y = foot.getWorldPosition(_footWorld).y;
-  return THREE.MathUtils.clamp((y - n.group.position.y - restY) / 0.34, 0, 1);
-}
-
-// 人类行走：手动采样 FBX 轨道，保留原动画的跨步与摆臂，再补上膝盖弯曲、
-// 脚掌滚动、重心转移和躯干/头部补偿。不依赖 AnimationMixer 是否写回骨骼。
 function applyHumanGait(n, dt, w, speed) {
+  const P = gaitTuning;
   const cur = n.curAction;
   const clip = cur && cur.getClip ? cur.getClip() : null;
   const pose = n.poseSample;
+  // 基础姿态：采样当前 FBX 动画（待机/互动仍然是原动画）。
   resetPose(pose);
   if (cur && clip) sampleClipInto(clip, cur.time, pose);
   if (n.prevAction && (n.clipFadeT || 0) < CLIP_FADE) {
@@ -849,47 +840,50 @@ function applyHumanGait(n, dt, w, speed) {
   n.clipFadeT = (n.clipFadeT || 0) + dt;
   if (n.clipFadeT >= CLIP_FADE) n.prevAction = null;
   applySampledPose(n, pose);
-  // FBX 原始走姿步幅偏大，略向绑定姿态回收，保留节奏但更像日常散步。
-  for (const name of ['UpperLegL', 'UpperLegR', 'LowerLegL', 'LowerLegR', 'UpperArmL', 'UpperArmR', 'LowerArmL', 'LowerArmR']) {
-    const bone = n.bones[name], rest = n.fullRest[name];
-    if (bone && rest) bone.quaternion.slerp(rest.q, 0.28);
+
+  if (w < 0.01) { n.group.updateMatrixWorld(true); groundFeet(n, dt); return; }
+
+  // 走路时把动画姿态收回绑定姿态，消除 FBX 的前倾大跨步，再叠加程序化步态。
+  const pull = P.toRest * w;
+  if (pull > 0) {
+    for (const name in n.bones) {
+      const bone = n.bones[name], rest = n.fullRest[name];
+      if (!bone || !rest) continue;
+      bone.quaternion.slerp(rest.q, pull);
+      bone.position.lerp(rest.p, pull);
+    }
   }
   n.group.updateMatrixWorld(true);
 
-  let ph;
-  if (clip && /walk/i.test(clip.name) && cur) {
-    ph = (cur.time / clip.duration) * Math.PI * 2;
-    n.walkPhase = ph;
-  } else {
-    n.walkPhase += dt * (2.4 + speed * 2.2);
-    ph = n.walkPhase;
-  }
-  if (w < 0.01) { groundFeet(n, dt); return; }
+  n.walkPhase += dt * (P.freqBase + speed * P.freqSpeed);
+  const ph = n.walkPhase;
+  const c = Math.cos(ph), s = Math.sin(ph);
+  const stride = P.stride * w;
 
-  // 抬脚越高，膝盖越弯；与动画片段本身的步态相位天然对齐。
-  const liftL = THREE.MathUtils.clamp((footLift(n, 'FootL') - 0.08) / 0.34, 0, 1);
-  const liftR = THREE.MathUtils.clamp((footLift(n, 'FootR') - 0.08) / 0.34, 0, 1);
-  const thighL = restAngle(n, 'UpperLegL');
-  const thighR = restAngle(n, 'UpperLegR');
-  rotateBone(n, 'LowerLegL', WORLD_SIDE, liftL * 0.35 * w);
-  rotateBone(n, 'LowerLegR', WORLD_SIDE, liftR * 0.35 * w);
-  rotateBone(n, 'FootL', WORLD_SIDE, (-thighL * 0.45 - liftL * 0.1) * w);
-  rotateBone(n, 'FootR', WORLD_SIDE, (-thighR * 0.45 - liftR * 0.1) * w);
+  // 大腿：左右腿反相前后摆（绕世界 X 轴，负角向前）。
+  // 小腿：只在摆动腿离地阶段弯曲（swing 区间为 cos 从 -1 回到 +1），支撑腿接近伸直。
+  const thighL = -stride * c, thighR = stride * c;
+  const kneeL = Math.max(0, -s) * P.knee * w, kneeR = Math.max(0, s) * P.knee * w;
+  rotateBone(n, 'UpperLegL', WORLD_SIDE, thighL);
+  rotateBone(n, 'UpperLegR', WORLD_SIDE, thighR);
+  rotateBone(n, 'LowerLegL', WORLD_SIDE, kneeL);
+  rotateBone(n, 'LowerLegR', WORLD_SIDE, kneeR);
+  rotateBone(n, 'FootL', WORLD_SIDE, -(thighL + kneeL) * P.ankle);
+  rotateBone(n, 'FootR', WORLD_SIDE, -(thighR + kneeR) * P.ankle);
 
-  // 两步一个重心周期：髋部轻微起伏与侧移，肩/头反向补偿。
-  const sway = Math.sin(ph);
-  const bob = Math.cos(ph * 2);
-  if (n.bones.Hips && n.fullRest.Hips) {
-    const hipEntry = n.poseSample.Hips;
-    const base = hipEntry && hipEntry.hasP ? hipEntry.p : n.fullRest.Hips.p;
-    n.bones.Hips.position.set(base.x + sway * 0.016 * w, base.y + bob * 0.012 * w, base.z);
+  // 手臂与对侧腿反相摆动，手肘保持自然微屈。
+  rotateBone(n, 'UpperArmL', WORLD_SIDE, P.arm * c * w);
+  rotateBone(n, 'UpperArmR', WORLD_SIDE, -P.arm * c * w);
+  rotateBone(n, 'LowerArmL', WORLD_SIDE, P.elbow * w);
+  rotateBone(n, 'LowerArmR', WORLD_SIDE, P.elbow * w);
+
+  // 髋部随步幅左右转移 + 每步两次的轻微起伏；躯干/头部反向补偿保持稳定。
+  if (n.bones.Hips) {
+    n.bones.Hips.position.x += P.sway * s * w;
+    n.bones.Hips.position.y += P.bob * Math.cos(ph * 2) * w;
   }
-  rotateBone(n, 'Hips', WORLD_UP, sway * 0.055 * w);
-  rotateBone(n, 'Hips', WORLD_FORWARD, -sway * 0.028 * w);
-  rotateBone(n, 'Torso', WORLD_UP, -sway * 0.04 * w);
-  rotateBone(n, 'Torso', WORLD_FORWARD, sway * 0.035 * w);
-  rotateBone(n, 'Head', WORLD_UP, sway * 0.018 * w);
-  rotateBone(n, 'Head', WORLD_SIDE, -bob * 0.015 * w);
+  rotateBone(n, 'Torso', WORLD_UP, -P.counter * s * w);
+  rotateBone(n, 'Head', WORLD_UP, -P.counter * s * w);
 
   groundFeet(n, dt);
 }
