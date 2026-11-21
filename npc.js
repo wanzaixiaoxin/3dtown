@@ -486,6 +486,7 @@ function addNPC(instance, opts) {
   scene.add(instance);
   const npc = {
     group: instance,
+    contactShadow,
     type: opts.type,
     pos: new THREE.Vector3(opts.x, 0, opts.z),
     vel: new THREE.Vector3(),
@@ -991,6 +992,7 @@ function groundFeet(n, dt) {
   if (n.groundY === undefined) n.groundY = targetY;
   n.groundY += (targetY - n.groundY) * Math.min(1, dt * 18);
   n.group.position.y = n.groundY;
+  if (n.contactShadow) n.contactShadow.position.y = 0.025 - n.group.position.y;
 }
 
 export function applyGait(n, dt, moving, speed, mode = 'walk') {

@@ -176,12 +176,11 @@ function buildAccessories(style) {
     return m;
   };
 
-  // 腰带：绕 Abdomen 骨一圈。Abdomen 世界 y≈0.84，局部原点即腰部，骨骼尺度 0.363。
-  // Torso/Hips 在步态中会旋转，腰带挂在 Abdomen 上随之起伏。
+  // 腰带使用薄圆筒布带，避免粗圆管在骨骼缩放后呈现“游泳圈”外观。
   return { style, build(abdomenBone) {
     if (!abdomenBone) return;
     const waist = mat(style.sash);
-    add(abdomenBone, new THREE.TorusGeometry(L(0.155), L(0.028), 6, 16), waist, 0, 0, 0, Math.PI / 2, 0, 0);
+    add(abdomenBone, new THREE.CylinderGeometry(L(0.125), L(0.125), L(0.035), 16, 1, true), waist);
     // 香囊：部分款式在腰侧挂一个小囊
     if (style.name === '商贾' || style.name === '书生') {
       add(abdomenBone, new THREE.SphereGeometry(L(0.035), 8, 6), mat(0x8c3a2e), L(0.16), L(-0.06), 0);
