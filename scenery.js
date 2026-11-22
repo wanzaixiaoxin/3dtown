@@ -763,35 +763,66 @@ export function buildSkyDecor(scene) {
   stars.name = 'stars';
   group.add(stars);
 
-  // --- cloud texture (soft radial puff) ---
-  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  // --- cloud texture (soft-edged puff, flatter than a pure radial ball) ---
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const ctx = cv.getContext('2d');
-  const grd = ctx.createRadialGradient(64, 64, 8, 64, 64, 62);
-  grd.addColorStop(0, 'rgba(255,255,255,0.95)');
-  grd.addColorStop(0.45, 'rgba(255,255,255,0.55)');
-  grd.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = grd; ctx.fillRect(0, 0, 128, 128);
+  // 叠加多个偏移椭圆，做出「底平顶圆」的真实积云轮廓
+  const puffs = [
+    [128, 148, 62], [88, 138, 46], [170, 140, 48], [128, 112, 52], [100, 100, 36], [160, 104, 38],
+  ];
+  for (const [px, py, pr] of puffs) {
+    const grd = ctx.createRadialGradient(px, py, pr * 0.15, px, py, pr);
+    grd.addColorStop(0, 'rgba(255,255,255,0.85)');
+    grd.addColorStop(0.55, 'rgba(255,255,255,0.45)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+  }
+  // 底部略带阴影，让云有体积感
+  const shade = ctx.createLinearGradient(0, 90, 0, 210);
+  shade.addColorStop(0, 'rgba(255,255,255,0)');
+  shade.addColorStop(1, 'rgba(160,175,195,0.30)');
+  ctx.globalCompositeOperation = 'source-atop';
+  ctx.fillStyle = shade; ctx.fillRect(0, 0, 256, 256);
+  ctx.globalCompositeOperation = 'source-over';
   const cloudTex = new THREE.CanvasTexture(cv);
   cloudTex.colorSpace = THREE.SRGBColorSpace;
 
   const cloudMat = new THREE.SpriteMaterial({
-    map: cloudTex, transparent: true, opacity: 0.38, depthWrite: false, fog: false,
+    map: cloudTex, transparent: true, opacity: 0.55, depthWrite: false, fog: false,
   });
   const clouds = new THREE.Group();
   clouds.name = 'clouds';
-  for (let i = 0; i < 18; i++) {
-    const s = new THREE.Sprite(cloudMat);
+  // 每朵云 = 主 sprite + 2-3 个子 sprite 拼成云团，跨度大、形状各异
+  for (let i = 0; i < 14; i++) {
+    const cloud = new THREE.Group();
     const a = Math.random() * Math.PI * 2;
-    const rr = 90 + Math.random() * 160;
-    s.position.set(Math.cos(a) * rr, 95 + Math.random() * 60, Math.sin(a) * rr);
-    const sc = 16 + Math.random() * 26;
-    s.scale.set(sc, sc * 0.45, 1);
-    clouds.add(s);
+    const rr = 90 + Math.random() * 170;
+    const baseY = 110 + Math.random() * 55;
+    cloud.position.set(Math.cos(a) * rr, baseY, Math.sin(a) * rr);
+    const blobs = 2 + Math.floor(Math.random() * 2);
+    for (let b = 0; b < blobs; b++) {
+      const s = new THREE.Sprite(cloudMat);
+      const ox = (b - (blobs - 1) / 2) * (18 + Math.random() * 10);
+      const oy = (Math.random() - 0.5) * 8;
+      s.position.set(ox, oy, 0);
+      const sc = 26 + Math.random() * 22;
+      s.scale.set(sc, sc * 0.5, 1);
+      cloud.add(s);
+    }
+    clouds.add(cloud);
   }
   group.add(clouds);
 
   scene.add(group);
-  return { stars, starMat, cloudMat, clouds };
+  // 云团缓慢漂移：每朵云沿 +x 匀速移动，超出范围后从西侧回收
+  const drift = (dt) => {
+    for (const cloud of clouds.children) {
+      cloud.position.x += dt * 2.2;
+      if (cloud.position.x > 300) cloud.position.x -= 600;
+    }
+  };
+  return { stars, starMat, cloudMat, clouds, cloudDrift: drift };
 }
 
 // ===========================================================================

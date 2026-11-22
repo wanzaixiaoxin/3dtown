@@ -677,6 +677,7 @@ export function setupEnvironment(scene) {
   env.sky = buildSky(scene);
   env.skyMat = null;
   env.skyDecor = buildSkyDecor(scene);
+  if (env.skyDecor?.cloudDrift) env.cloudDrift = env.skyDecor.cloudDrift;
   env.petals = buildPetals(scene, D.petals[0], D.petals[1]);
   env.mist = buildMist(scene, D.mist);
   buildRain(scene, D.rain);
@@ -926,7 +927,7 @@ export function buildWorld(scene, assets = null) {
     buildHouse(world, ...def);
   }
 
-  buildDistricts(world, { buildHouse, buildTree, colliders });
+  buildDistricts(world, { buildHouse, buildTree, colliders, assets });
 
   // --- pavilion on the plaza east edge (two-tier) ---
   const PV = BUILD_CFG.pavilion;

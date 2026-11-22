@@ -12,6 +12,48 @@ const loader = new FBXLoader();
 const cache = new Map();     // url -> THREE.Group (original)
 export const mixers = [];    // AnimationMixer list updated each frame
 
+// Quaternius 的部分建筑包（2017 Buildings / Civilization）只有单个白色材质，
+// 贴图不内嵌（FBX 不带 atlas）。按模型哈希给整栋建筑一套明快色板，
+// 屋顶部分（法线朝上的独立 mesh）用深色，其余为墙体亮色。
+function paintUntexturedBuildings(root) {
+  // 明快的墙体色板（低饱和暖色系，与程序化街区协调）
+  const palettes = [
+    { wall: 0xe8e0d0, roof: 0x555c66 },   // 米白 + 青灰顶
+    { wall: 0xe3d5bd, roof: 0x6b4a3a },   // 暖米 + 砖红顶
+    { wall: 0xd8dcd0, roof: 0x46525c },   // 灰白 + 深蓝顶
+    { wall: 0xe6d8c8, roof: 0x5d6a55 },   // 奶白 + 墨绿顶
+    { wall: 0xdcd2c0, roof: 0x66605a },   // 浅灰米 + 深棕顶
+    { wall: 0xe0d6c6, roof: 0x74584a },   // 米黄 + 赭石顶
+  ];
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const untextured = mats.every(m => !m.map && (!m.color || m.color.getHexString() === 'ffffff'));
+    if (!untextured) return;
+    const seedStr = (mats[0].name || 'x') + '|' + o.name;
+    let hash = 0;
+    for (const ch of seedStr) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+    const palette = palettes[Math.abs(hash) % palettes.length];
+    for (const m of mats) {
+      m.color.set(palette.wall);
+      m.roughness = 0.88;
+      m.needsUpdate = true;
+    }
+    // 若整个 mesh 的法线都朝上（ roofs 常拆成独立 mesh），用屋顶色
+    const normal = o.geometry && o.geometry.attributes.normal;
+    if (normal) {
+      let upCount = 0, total = 0;
+      for (let i = 0; i < normal.count; i += 3) {
+        total++;
+        if (normal.getY(i) > 0.7) upCount++;
+      }
+      if (total > 0 && upCount / total > 0.6) {
+        for (const m of mats) { m.color.set(palette.roof); m.needsUpdate = true; }
+      }
+    }
+  });
+}
+
 // Convert FBX default Phong materials to lit Standard materials (keeps textures),
 // and enable shadows.
 function convertMaterials(root) {
@@ -113,6 +155,7 @@ export function loadFBX(url, { targetHeight = null, targetFootprint = null, face
   return new Promise((resolve, reject) => {
     loader.load(url, (obj) => {
       convertMaterials(obj);
+      paintUntexturedBuildings(obj);
       flattenSolidSkinnedMaterials(obj);
       // Shrink oversized shoes on Quaternius characters (scale foot bones).
       if (feetScale !== 1) {

@@ -150,7 +150,7 @@ function signBoard(group, text, x, z, width = 3.8, color = '#286293') {
 }
 
 function buildRoadSigns(group) {
-  for (const args of [['中央商业街 步行优先',-7,9],['学校区域 减速慢行',38,-38],['工业区 货车通行',-70,-38],['全城限速 40',58,8]]) signBoard(group, ...args);
+  for (const args of [['中央商业街 步行优先',-7,9],['学校区域 减速慢行',-92,-92],['工业区 货车通行',186,-95],['全城限速 40',58,8]]) signBoard(group, ...args);
   for (const v of VEHICLE_ROADS) for (const h of ALL_ROADS) {
     if (Math.abs(v) > 200 || Math.abs(h) > 200) continue;
     const vi = ALL_ROADS.indexOf(v) + 1, hi = ALL_ROADS.indexOf(h) + 1;

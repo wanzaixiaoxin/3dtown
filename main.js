@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CONFIG } from './config.js';
 import { M, disposables, setPBRTextures } from './materials.js';
 import {
-  TOWN, colliders, ladders, walkableLanes, world as worldRef,
+  TOWN, colliders, ladders, walkableLanes, world as worldRef, env,
   buildWorld, setupEnvironment, applyTime, getExposure, getTimeLabel, getNightAmount,
   setEnvMaps, setWeatherMode, setFogEnabled,
 } from './world.js';
@@ -721,6 +721,8 @@ function animate() {
   updateDistrictLOD(camera);
   updateTraffic(dt, npcs, getNightAmount());
   updateWind(clock.elapsedTime);
+  // clouds drift (env.cloudDrift set by setupEnvironment)
+  if (env?.cloudDrift) env.cloudDrift(dt);
   updateWaterfall(dt);
   updateBoats(clock.elapsedTime);
   updateMist(clock.elapsedTime);

@@ -15,6 +15,9 @@
 | 文件 | 原始资源包 | 用途 |
 |------|-----------|------|
 | `House1.fbx`, `House2.fbx`, `Building4.fbx`, `Building2_Small.fbx` | Home and Buildings / Buildings Pack - Jan 2019 | 广场周边主建筑 |
+| `bank.fbx`, `hospital.fbx`, `shop.fbx`, `flat.fbx`, `flat2.fbx`, `qhouse1_2017.fbx`, `qhouse2.fbx`, `qhouse3.fbx`, `qhouse4.fbx`, `qhouse5.fbx` | Home and Buildings / Buildings Pack - Aug 2017 | 城市功能分区建筑（公寓/学校/公安/消防/车站/社区住宅） |
+| `building1_large.fbx`, `building2_large.fbx`, `building3_big.fbx` | Home and Buildings / Buildings Pack - Jan 2019 | CBD 高层塔楼 |
+| `japanesetemple.fbx`, `medieval_house.fbx` | Home and Buildings / Civilization Buildings - May 2018 | 作坊区工坊、学校配楼 |
 | `Well.fbx`, `Windmill.fbx`, `Barn.fbx`, `ChickenCoop.fbx` | Farm Buildings - Sept 2018 | 器物与副建筑 |
 | `char_male_casual.fbx`, `char_male_longsleeve.fbx`, `char_female_casual.fbx` | Animated Men/Women Characters - Feb 2019 | 带动画的村民 NPC（行走/奔跑/站立/跳跃） |
 | `Cow.fbx`, `Horse.fbx`, `Sheep.fbx`, `Pig.fbx`, `Pug.fbx` | Farm Animals Animated - Jun 2018 | 带动画的家畜（行走/待机/奔跑） |

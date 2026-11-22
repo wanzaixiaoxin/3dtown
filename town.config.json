@@ -4,10 +4,14 @@
     "description": "古镇小镇集中配置：分类管理 / 集中调度 / 性能平衡",
     "units": "1 unit = 1 meter"
   },
-
   "town": {
     "half": 260,
-    "plot": { "x": 24.5, "z": 16, "halfW": 11, "halfD": 10 },
+    "plot": {
+      "x": 24.5,
+      "z": 16,
+      "halfW": 11,
+      "halfD": 10
+    },
     "approachRoads": {
       "width": 7,
       "length": 16,
@@ -16,335 +20,1737 @@
       "markers": true
     }
   },
-
   "buildings": {
     "grid": {
       "seed": 1,
       "blockOffsets": [],
       "runs": [],
-      "size": { "w": [5, 7.5], "d": [5, 6.8], "h": [4, 5.6] },
-      "flankSize": { "w": [5, 7], "d": [5, 6.5], "h": [4, 5.6] },
+      "size": {
+        "w": [
+          5,
+          7.5
+        ],
+        "d": [
+          5,
+          6.8
+        ],
+        "h": [
+          4,
+          5.6
+        ]
+      },
+      "flankSize": {
+        "w": [
+          5,
+          7
+        ],
+        "d": [
+          5,
+          6.5
+        ],
+        "h": [
+          4,
+          5.6
+        ]
+      },
       "gap": 0.3
     },
-    "roofMaterials": ["roofBlue", "roofBrown", "roofGrey"],
-    "wallMaterials": ["plaster", "plasterWarm"],
+    "roofMaterials": [
+      "roofBlue",
+      "roofBrown",
+      "roofGrey"
+    ],
+    "wallMaterials": [
+      "plaster",
+      "plasterWarm"
+    ],
     "reserved": [
-      { "x": -16, "z": 16, "r": 11 },
-      { "x": -10, "z": 20, "r": 8.5 },
-      { "x": -24, "z": 14, "r": 5 },
-      { "x": -22, "z": 24, "r": 4 },
-      { "x": 16, "z": -16, "r": 10 }
+      {
+        "x": -16,
+        "z": 16,
+        "r": 11
+      },
+      {
+        "x": -10,
+        "z": 20,
+        "r": 8.5
+      },
+      {
+        "x": -24,
+        "z": 14,
+        "r": 5
+      },
+      {
+        "x": -22,
+        "z": 24,
+        "r": 4
+      },
+      {
+        "x": 16,
+        "z": -16,
+        "r": 10
+      }
     ],
     "pavilion": {
       "enabled": false,
-      "x": 17, "z": 0, "w": 6.5, "d": 6.5, "h": 5.4,
-      "roofH": 2.2, "rotY": "PI", "tier": { "w": 3.6, "h": 1.7, "d": 3.6 },
-      "tierRoof": { "r": 3.8, "h": 1.7, "segments": 4 }
+      "x": 17,
+      "z": 0,
+      "w": 6.5,
+      "d": 6.5,
+      "h": 5.4,
+      "roofH": 2.2,
+      "rotY": "PI",
+      "tier": {
+        "w": 3.6,
+        "h": 1.7,
+        "d": 3.6
+      },
+      "tierRoof": {
+        "r": 3.8,
+        "h": 1.7,
+        "segments": 4
+      }
     },
-    "walls": { "height": 3.6, "thickness": 1.4, "inset": 5, "offset": 2.5 },
+    "walls": {
+      "height": 3.6,
+      "thickness": 1.4,
+      "inset": 5,
+      "offset": 2.5
+    },
     "ladders": [
-      { "x": 12, "z": "H-0.9", "baseY": 0, "topY": 3.6, "facing": { "x": 0, "z": -1 } },
-      { "x": "-H+0.9", "z": 10, "baseY": 0, "topY": 3.6, "facing": { "x": 1, "z": 0 } }
+      {
+        "x": 12,
+        "z": "H-0.9",
+        "baseY": 0,
+        "topY": 3.6,
+        "facing": {
+          "x": 0,
+          "z": -1
+        }
+      },
+      {
+        "x": "-H+0.9",
+        "z": 10,
+        "baseY": 0,
+        "topY": 3.6,
+        "facing": {
+          "x": 1,
+          "z": 0
+        }
+      }
     ],
     "heroes": [
-      { "asset": "house1", "x": -8, "z": -9, "rotY": 0.35 },
-      { "asset": "house2", "x": 9, "z": -9, "rotY": -0.3 },
-      { "asset": "building4", "x": -9, "z": 9, "rotY": "PI+0.2" },
-      { "asset": "building2s", "x": 9, "z": 9, "rotY": "PI-0.25" }
+      {
+        "asset": "house1",
+        "x": -8,
+        "z": -9,
+        "rotY": 0.35
+      },
+      {
+        "asset": "house2",
+        "x": 9,
+        "z": -9,
+        "rotY": -0.3
+      },
+      {
+        "asset": "building4",
+        "x": -9,
+        "z": 9,
+        "rotY": "PI+0.2"
+      },
+      {
+        "asset": "building2s",
+        "x": 9,
+        "z": 9,
+        "rotY": "PI-0.25"
+      }
     ],
     "farms": [
-      { "asset": "windmill", "x": -88, "z": 60, "rotY": 0.6, "colliderTop": 9.0, "kind": "tower" },
-      { "asset": "barn", "x": 88, "z": 60, "rotY": -0.4, "colliderTop": 4.5, "kind": "house" },
-      { "asset": "coop", "x": -88, "z": 36, "rotY": 0.8, "colliderTop": 2.0, "kind": "house" }
+      {
+        "asset": "windmill",
+        "x": -88,
+        "z": 60,
+        "rotY": 0.6,
+        "colliderTop": 9.0,
+        "kind": "tower"
+      },
+      {
+        "asset": "barn",
+        "x": 88,
+        "z": 60,
+        "rotY": -0.4,
+        "colliderTop": 4.5,
+        "kind": "house"
+      },
+      {
+        "asset": "coop",
+        "x": -88,
+        "z": 36,
+        "rotY": 0.8,
+        "colliderTop": 2.0,
+        "kind": "house"
+      }
     ],
-    "shopShell": { "w": 4.8, "d": 3.4, "h": 8.4, "stories": 3, "roofH": 1.8 }
+    "shopShell": {
+      "w": 4.8,
+      "d": 3.4,
+      "h": 8.4,
+      "stories": 3,
+      "roofH": 1.8
+    }
   },
-
   "scenery": {
     "exclusion": {
       "roadHalf": 12,
-      "shopRow": { "center": 10, "band": 4, "minZ": 12 },
-      "pond": { "x": -16, "z": 16, "r": 10 },
-      "pavilion": { "x": -10, "z": 20, "r": 8 },
-      "garden": { "x": 16, "z": -16, "r": 10 },
+      "shopRow": {
+        "center": 10,
+        "band": 4,
+        "minZ": 12
+      },
+      "pond": {
+        "x": -16,
+        "z": 16,
+        "r": 10
+      },
+      "pavilion": {
+        "x": -10,
+        "z": 20,
+        "r": 8
+      },
+      "garden": {
+        "x": 16,
+        "z": -16,
+        "r": 10
+      },
       "plotPad": 3
     },
-    "roads": { "width": 9, "vehicleWidth": 14, "plazaRadius": 11, "ringInner": 10.2, "ringOuter": 10.9, "cobbles": 900 },
+    "roads": {
+      "width": 9,
+      "vehicleWidth": 14,
+      "plazaRadius": 11,
+      "ringInner": 10.2,
+      "ringOuter": 10.9,
+      "cobbles": 900
+    },
     "treeSpots": [
-      [-34, 12], [34, -12], [-12, 34], [12, -34], [-40, -30], [40, 30],
-      [-20, 20], [20, -20], [-30, -14], [30, 14], [-8, 30], [8, -30],
-      [-36, 36], [36, -36], [-24, 8], [24, -8], [-16, 24], [16, -24],
-      [42, 0], [-42, 0], [0, 40], [0, -40], [-30, 40], [30, -40]
+      [
+        -34,
+        12
+      ],
+      [
+        34,
+        -12
+      ],
+      [
+        -12,
+        34
+      ],
+      [
+        12,
+        -34
+      ],
+      [
+        -40,
+        -30
+      ],
+      [
+        40,
+        30
+      ],
+      [
+        -20,
+        20
+      ],
+      [
+        20,
+        -20
+      ],
+      [
+        -30,
+        -14
+      ],
+      [
+        30,
+        14
+      ],
+      [
+        -8,
+        30
+      ],
+      [
+        8,
+        -30
+      ],
+      [
+        -36,
+        36
+      ],
+      [
+        36,
+        -36
+      ],
+      [
+        -24,
+        8
+      ],
+      [
+        24,
+        -8
+      ],
+      [
+        -16,
+        24
+      ],
+      [
+        16,
+        -24
+      ],
+      [
+        42,
+        0
+      ],
+      [
+        -42,
+        0
+      ],
+      [
+        0,
+        40
+      ],
+      [
+        0,
+        -40
+      ],
+      [
+        -30,
+        40
+      ],
+      [
+        30,
+        -40
+      ]
     ],
-    "treeScale": { "base": 0.85, "step": 0.12, "cycle": 4 },
+    "treeScale": {
+      "base": 0.85,
+      "step": 0.12,
+      "cycle": 4
+    },
     "lampPositions": [
-      [6, 12], [-6, 12], [6, -12], [-6, -12],
-      [6, 24], [-6, 24], [6, -24], [-6, -24],
-      [12, 6], [-12, 6], [12, -6], [-12, -6],
-      [24, 6], [-24, 6], [24, -6], [-24, -6]
+      [
+        6,
+        12
+      ],
+      [
+        -6,
+        12
+      ],
+      [
+        6,
+        -12
+      ],
+      [
+        -6,
+        -12
+      ],
+      [
+        6,
+        24
+      ],
+      [
+        -6,
+        24
+      ],
+      [
+        6,
+        -24
+      ],
+      [
+        -6,
+        -24
+      ],
+      [
+        12,
+        6
+      ],
+      [
+        -12,
+        6
+      ],
+      [
+        12,
+        -6
+      ],
+      [
+        -12,
+        -6
+      ],
+      [
+        24,
+        6
+      ],
+      [
+        -24,
+        6
+      ],
+      [
+        24,
+        -6
+      ],
+      [
+        -24,
+        -6
+      ]
     ],
     "nightLights": {
-      "spots": [[0, -1.5], [12, 6], [-12, 6], [12, -6], [-12, -6], [0, 20], [0, -20], [0, 34], [17, 0]],
-      "color": "0xffb060", "distance": 30, "decay": 2,
-      "height": 3.4, "baseIntensity": 9, "intensityStep": 2.5, "intensityCycle": 3
+      "spots": [
+        [
+          0,
+          -1.5
+        ],
+        [
+          12,
+          6
+        ],
+        [
+          -12,
+          6
+        ],
+        [
+          12,
+          -6
+        ],
+        [
+          -12,
+          -6
+        ],
+        [
+          0,
+          20
+        ],
+        [
+          0,
+          -20
+        ],
+        [
+          0,
+          34
+        ],
+        [
+          17,
+          0
+        ]
+      ],
+      "color": "0xffb060",
+      "distance": 30,
+      "decay": 2,
+      "height": 3.4,
+      "baseIntensity": 9,
+      "intensityStep": 2.5,
+      "intensityCycle": 3
     },
     "calls": [
-      { "fn": "pond", "args": [-16, 16, 7] },
-      { "fn": "pavilion", "args": [-10, 20, 1.0] },
-      { "fn": "rockery", "args": [-24, 14, 1.3] },
-      { "fn": "rockery", "args": [-22, 24, 1.0] },
-      { "fn": "garden", "args": [16, -16, 10] },
-      { "fn": "willow", "args": [-24, 20, 1.1] },
-      { "fn": "willow", "args": [-12, 8, 1.0] },
-      { "fn": "willow", "args": [-20, 26, 1.05] },
-      { "fn": "willow", "args": [-26, 24, 0.95] },
-      { "fn": "willow", "args": [24, 40, 1.0] },
-      { "fn": "flowerBed", "args": [24, -26, 3.0, 140] },
-      { "fn": "flowerBed", "args": [40, -26, 2.5, 100, ["petalYellow", "petalWhite", "petalPink"]] },
-      { "fn": "flowerBed", "args": [-20, 24, 2.2, 90, ["petalRed", "petalPink"]] },
-      { "fn": "flowerBed", "args": [18, 22, 2.4, 100] },
-      { "fn": "flowerBed", "args": [12, -24, 2.0, 80, ["petalYellow", "petalWhite"]] },
-      { "fn": "bush", "args": [[-12, 26], [10, 26], [-38, 8], [36, 8], [26, 20], [-24, -24], [24, -18], [-8, -24]], "scale": [0.65, 0.18, 3] },
-      { "fn": "pine", "args": [-24, 40, 1.0] },
-      { "fn": "pine", "args": [-24, 44, 0.9] },
-      { "fn": "pine", "args": [26, -38, 1.0] },
-      { "fn": "pine", "args": [38, -24, 0.85] },
-      { "fn": "pine", "args": [-40, -18, 1.05] },
-      { "fn": "pine", "args": [40, -2, 0.95] },
-      { "fn": "bamboo", "args": [-40, 12, 11, 1.0] },
-      { "fn": "bamboo", "args": [44, 28, 9, 0.95] },
-      { "fn": "bamboo", "args": [-40, -40, 8, 0.9] },
-      { "fn": "waterfall", "args": [-22, 1.5, 21.6, 2.0, 3.4, 0] },
-      { "fn": "boat", "args": [-13.5, 15.5, -0.7, 1.0] },
-      { "fn": "lanternString", "args": [-9, 10.5, 9, 10.5, 4.4, 9, 0.7] },
-      { "fn": "lanternString", "args": [-9, -10.5, 9, -10.5, 4.4, 9, 0.7] },
-      { "fn": "lanternString", "args": [10.5, -9, 10.5, 9, 4.4, 9, 0.7] },
-      { "fn": "banner", "args": [6.4, 6.2, "酒", -0.4] },
-      { "fn": "banner", "args": [-7.2, -6.4, "茶", 0.5] },
-      { "fn": "banner", "args": [15.4, -3.2, "客栈", -1.2] },
-      { "fn": "bronzeDing", "args": [3.6, 4.2, 0.9] },
-      { "fn": "stoneLion", "args": [-4.6, 257.2, 0.95, "PI"] },
-      { "fn": "stoneLion", "args": [4.6, 257.2, 0.95, "PI"] }
-    ]
-  },
-
-  "environment": {
-    "initialFog": { "color": "0xc8d8e2", "near": 70, "far": 260, "enabled": false },
-    "lights": {
-      "hemi": { "sky": "0xbfd4e8", "ground": "0x6b5a44", "intensity": 1.0 },
-      "ambient": { "color": "0x556270", "intensity": 0.3 },
-      "sun": { "color": "0xfff4dd", "intensity": 2.6, "position": [40, 80, 30], "shadowMap": 1024 },
-      "rim": { "color": "0x9db8d6", "intensity": 0.5, "position": [-40, 30, -50], "nightFade": 0.7 }
-    },
-    "decor": { "petals": [38, 300], "mist": 14, "rain": 1800 },
-    "stars": { "opacityScale": 1.2, "opacityOffset": -0.15 },
-    "clouds": { "opacity": 0.5, "visibleBelow": 0.85 },
-    "weather": {
-      "rain": {
-        "fogColor": "0x8d99a6", "fogNearScale": 0.45, "fogFarScale": 0.55,
-        "sunScale": 0.55, "nightSkyScale": 0.55
-      }
-    },
-    "envMapIntensity": { "morning": 0.12, "noon": 0.1, "afternoon": 0.14, "night": 0.1 },
-    "emissive": {
-      "windowLit": {
-        "base": 0.15, "scale": 2.6, "dayColor": "0x3a3630", "nightColor": "0x2a2016",
-        "variants": [
-          { "threshold": 0.0, "brightness": 1.0 },
-          { "threshold": 0.12, "brightness": 0.72 },
-          { "threshold": 0.26, "brightness": 1.12 },
-          { "threshold": 0.4, "brightness": 0.62 },
-          { "threshold": 0.54, "brightness": 0.9 }
+      {
+        "fn": "pond",
+        "args": [
+          -16,
+          16,
+          7
         ]
       },
-      "lantern": { "base": 0.2, "scale": 2.6 },
-      "lampGlow": { "base": 0.15, "scale": 3.4 }
+      {
+        "fn": "pavilion",
+        "args": [
+          -10,
+          20,
+          1.0
+        ]
+      },
+      {
+        "fn": "rockery",
+        "args": [
+          -24,
+          14,
+          1.3
+        ]
+      },
+      {
+        "fn": "rockery",
+        "args": [
+          -22,
+          24,
+          1.0
+        ]
+      },
+      {
+        "fn": "garden",
+        "args": [
+          16,
+          -16,
+          10
+        ]
+      },
+      {
+        "fn": "willow",
+        "args": [
+          -24,
+          20,
+          1.1
+        ]
+      },
+      {
+        "fn": "willow",
+        "args": [
+          -12,
+          8,
+          1.0
+        ]
+      },
+      {
+        "fn": "willow",
+        "args": [
+          -20,
+          26,
+          1.05
+        ]
+      },
+      {
+        "fn": "willow",
+        "args": [
+          -26,
+          24,
+          0.95
+        ]
+      },
+      {
+        "fn": "willow",
+        "args": [
+          24,
+          40,
+          1.0
+        ]
+      },
+      {
+        "fn": "flowerBed",
+        "args": [
+          24,
+          -26,
+          3.0,
+          140
+        ]
+      },
+      {
+        "fn": "flowerBed",
+        "args": [
+          40,
+          -26,
+          2.5,
+          100,
+          [
+            "petalYellow",
+            "petalWhite",
+            "petalPink"
+          ]
+        ]
+      },
+      {
+        "fn": "flowerBed",
+        "args": [
+          -20,
+          24,
+          2.2,
+          90,
+          [
+            "petalRed",
+            "petalPink"
+          ]
+        ]
+      },
+      {
+        "fn": "flowerBed",
+        "args": [
+          18,
+          22,
+          2.4,
+          100
+        ]
+      },
+      {
+        "fn": "flowerBed",
+        "args": [
+          12,
+          -24,
+          2.0,
+          80,
+          [
+            "petalYellow",
+            "petalWhite"
+          ]
+        ]
+      },
+      {
+        "fn": "bush",
+        "args": [
+          [
+            -12,
+            26
+          ],
+          [
+            10,
+            26
+          ],
+          [
+            -38,
+            8
+          ],
+          [
+            36,
+            8
+          ],
+          [
+            26,
+            20
+          ],
+          [
+            -24,
+            -24
+          ],
+          [
+            24,
+            -18
+          ],
+          [
+            -8,
+            -24
+          ]
+        ],
+        "scale": [
+          0.65,
+          0.18,
+          3
+        ]
+      },
+      {
+        "fn": "pine",
+        "args": [
+          -24,
+          40,
+          1.0
+        ]
+      },
+      {
+        "fn": "pine",
+        "args": [
+          -24,
+          44,
+          0.9
+        ]
+      },
+      {
+        "fn": "pine",
+        "args": [
+          26,
+          -38,
+          1.0
+        ]
+      },
+      {
+        "fn": "pine",
+        "args": [
+          38,
+          -24,
+          0.85
+        ]
+      },
+      {
+        "fn": "pine",
+        "args": [
+          -40,
+          -18,
+          1.05
+        ]
+      },
+      {
+        "fn": "pine",
+        "args": [
+          40,
+          -2,
+          0.95
+        ]
+      },
+      {
+        "fn": "bamboo",
+        "args": [
+          -40,
+          12,
+          11,
+          1.0
+        ]
+      },
+      {
+        "fn": "bamboo",
+        "args": [
+          44,
+          28,
+          9,
+          0.95
+        ]
+      },
+      {
+        "fn": "bamboo",
+        "args": [
+          -40,
+          -40,
+          8,
+          0.9
+        ]
+      },
+      {
+        "fn": "waterfall",
+        "args": [
+          -22,
+          1.5,
+          21.6,
+          2.0,
+          3.4,
+          0
+        ]
+      },
+      {
+        "fn": "boat",
+        "args": [
+          -13.5,
+          15.5,
+          -0.7,
+          1.0
+        ]
+      },
+      {
+        "fn": "lanternString",
+        "args": [
+          -9,
+          10.5,
+          9,
+          10.5,
+          4.4,
+          9,
+          0.7
+        ]
+      },
+      {
+        "fn": "lanternString",
+        "args": [
+          -9,
+          -10.5,
+          9,
+          -10.5,
+          4.4,
+          9,
+          0.7
+        ]
+      },
+      {
+        "fn": "lanternString",
+        "args": [
+          10.5,
+          -9,
+          10.5,
+          9,
+          4.4,
+          9,
+          0.7
+        ]
+      },
+      {
+        "fn": "banner",
+        "args": [
+          6.4,
+          6.2,
+          "酒",
+          -0.4
+        ]
+      },
+      {
+        "fn": "banner",
+        "args": [
+          -7.2,
+          -6.4,
+          "茶",
+          0.5
+        ]
+      },
+      {
+        "fn": "banner",
+        "args": [
+          15.4,
+          -3.2,
+          "客栈",
+          -1.2
+        ]
+      },
+      {
+        "fn": "bronzeDing",
+        "args": [
+          3.6,
+          4.2,
+          0.9
+        ]
+      },
+      {
+        "fn": "stoneLion",
+        "args": [
+          -4.6,
+          257.2,
+          0.95,
+          "PI"
+        ]
+      },
+      {
+        "fn": "stoneLion",
+        "args": [
+          4.6,
+          257.2,
+          0.95,
+          "PI"
+        ]
+      }
+    ]
+  },
+  "environment": {
+    "initialFog": {
+      "color": "0xc8d8e2",
+      "near": 70,
+      "far": 260,
+      "enabled": false
+    },
+    "lights": {
+      "hemi": {
+        "sky": "0xbfd4e8",
+        "ground": "0x6b5a44",
+        "intensity": 1.0
+      },
+      "ambient": {
+        "color": "0x556270",
+        "intensity": 0.3
+      },
+      "sun": {
+        "color": "0xfff4dd",
+        "intensity": 2.6,
+        "position": [
+          40,
+          80,
+          30
+        ],
+        "shadowMap": 1024
+      },
+      "rim": {
+        "color": "0x9db8d6",
+        "intensity": 0.5,
+        "position": [
+          -40,
+          30,
+          -50
+        ],
+        "nightFade": 0.7
+      }
+    },
+    "decor": {
+      "petals": [
+        38,
+        300
+      ],
+      "mist": 14,
+      "rain": 1800
+    },
+    "stars": {
+      "opacityScale": 1.2,
+      "opacityOffset": -0.15
+    },
+    "clouds": {
+      "opacity": 0.5,
+      "visibleBelow": 0.85
+    },
+    "weather": {
+      "rain": {
+        "fogColor": "0x8d99a6",
+        "fogNearScale": 0.45,
+        "fogFarScale": 0.55,
+        "sunScale": 0.55,
+        "nightSkyScale": 0.55
+      }
+    },
+    "envMapIntensity": {
+      "morning": 0.12,
+      "noon": 0.1,
+      "afternoon": 0.14,
+      "night": 0.1
+    },
+    "emissive": {
+      "windowLit": {
+        "base": 0.15,
+        "scale": 2.6,
+        "dayColor": "0x3a3630",
+        "nightColor": "0x2a2016",
+        "variants": [
+          {
+            "threshold": 0.0,
+            "brightness": 1.0
+          },
+          {
+            "threshold": 0.12,
+            "brightness": 0.72
+          },
+          {
+            "threshold": 0.26,
+            "brightness": 1.12
+          },
+          {
+            "threshold": 0.4,
+            "brightness": 0.62
+          },
+          {
+            "threshold": 0.54,
+            "brightness": 0.9
+          }
+        ]
+      },
+      "lantern": {
+        "base": 0.2,
+        "scale": 2.6
+      },
+      "lampGlow": {
+        "base": 0.15,
+        "scale": 3.4
+      }
     },
     "timePresets": {
       "morning": {
-        "label": "清晨", "skyTop": "0x9fb6cf", "skyBot": "0xf0dcc0", "fog": "0xe2d4bc",
-        "fogNear": 90, "fogFar": 300, "hemiSky": "0xcfe0ee", "hemiGround": "0x7a6a50",
-        "hemiInt": 0.5, "sunColor": "0xffe0b0", "sunInt": 1.5, "sunPos": [-60, 40, 50],
-        "ambient": "0x3a4a5a", "ambientInt": 0.35, "exposure": 1.0, "nightAmount": 0.35
+        "label": "清晨",
+        "skyTop": "0x9fb6cf",
+        "skyBot": "0xf0dcc0",
+        "fog": "0xe2d4bc",
+        "fogNear": 90,
+        "fogFar": 300,
+        "hemiSky": "0xcfe0ee",
+        "hemiGround": "0x7a6a50",
+        "hemiInt": 0.5,
+        "sunColor": "0xffe0b0",
+        "sunInt": 1.5,
+        "sunPos": [
+          -60,
+          40,
+          50
+        ],
+        "ambient": "0x3a4a5a",
+        "ambientInt": 0.35,
+        "exposure": 1.0,
+        "nightAmount": 0.35
       },
       "noon": {
-        "label": "正午", "skyTop": "0x4f86c0", "skyBot": "0xcfe0ea", "fog": "0xc2d4e0",
-        "fogNear": 150, "fogFar": 430, "hemiSky": "0xbfd4e8", "hemiGround": "0x6b5a44",
-        "hemiInt": 0.5, "sunColor": "0xfff4dd", "sunInt": 2.3, "sunPos": [40, 80, 30],
-        "ambient": "0x556270", "ambientInt": 0.12, "exposure": 0.9, "nightAmount": 0.0
+        "label": "正午",
+        "skyTop": "0x4f86c0",
+        "skyBot": "0xcfe0ea",
+        "fog": "0xc2d4e0",
+        "fogNear": 150,
+        "fogFar": 430,
+        "hemiSky": "0xbfd4e8",
+        "hemiGround": "0x6b5a44",
+        "hemiInt": 0.5,
+        "sunColor": "0xfff4dd",
+        "sunInt": 2.3,
+        "sunPos": [
+          40,
+          80,
+          30
+        ],
+        "ambient": "0x556270",
+        "ambientInt": 0.12,
+        "exposure": 0.9,
+        "nightAmount": 0.0
       },
       "afternoon": {
-        "label": "黄昏", "skyTop": "0x8a6ea8", "skyBot": "0xf0b070", "fog": "0xddaa78",
-        "fogNear": 90, "fogFar": 320, "hemiSky": "0xd8b898", "hemiGround": "0x6a5040",
-        "hemiInt": 0.5, "sunColor": "0xffb060", "sunInt": 1.9, "sunPos": [55, 26, -40],
-        "ambient": "0x4a3a48", "ambientInt": 0.35, "exposure": 1.02, "nightAmount": 0.45
+        "label": "黄昏",
+        "skyTop": "0x8a6ea8",
+        "skyBot": "0xf0b070",
+        "fog": "0xddaa78",
+        "fogNear": 90,
+        "fogFar": 320,
+        "hemiSky": "0xd8b898",
+        "hemiGround": "0x6a5040",
+        "hemiInt": 0.5,
+        "sunColor": "0xffb060",
+        "sunInt": 1.9,
+        "sunPos": [
+          55,
+          26,
+          -40
+        ],
+        "ambient": "0x4a3a48",
+        "ambientInt": 0.35,
+        "exposure": 1.02,
+        "nightAmount": 0.45
       },
       "night": {
-        "label": "夜晚", "skyTop": "0x0b1526", "skyBot": "0x1e2b42", "fog": "0x162034",
-        "fogNear": 80, "fogFar": 300, "hemiSky": "0x3e5578", "hemiGround": "0x201a24",
-        "hemiInt": 0.55, "sunColor": "0xa9c2e8", "sunInt": 0.85, "sunPos": [-30, 70, -50],
-        "ambient": "0x33465f", "ambientInt": 0.9, "exposure": 1.25, "nightAmount": 1.0
+        "label": "夜晚",
+        "skyTop": "0x0b1526",
+        "skyBot": "0x1e2b42",
+        "fog": "0x162034",
+        "fogNear": 80,
+        "fogFar": 300,
+        "hemiSky": "0x3e5578",
+        "hemiGround": "0x201a24",
+        "hemiInt": 0.55,
+        "sunColor": "0xa9c2e8",
+        "sunInt": 0.85,
+        "sunPos": [
+          -30,
+          70,
+          -50
+        ],
+        "ambient": "0x33465f",
+        "ambientInt": 0.9,
+        "exposure": 1.25,
+        "nightAmount": 1.0
       }
     }
   },
-
   "commerce": {
     "types": [
-      { "sign": "酒", "name": "醉仙酒馆", "color": "#9e3f32" },
-      { "sign": "茶", "name": "清风茶肆", "color": "#3f7054" },
-      { "sign": "布", "name": "锦绣布庄", "color": "#526b9d" },
-      { "sign": "药", "name": "回春药铺", "color": "#527443" },
-      { "sign": "客栈", "name": "悦来客栈", "color": "#935c35" },
-      { "sign": "米", "name": "丰年米行", "color": "#a37b35" },
-      { "sign": "瓷", "name": "青瓷雅集", "color": "#39747b" },
-      { "sign": "书", "name": "文渊书肆", "color": "#695183" }
+      {
+        "sign": "酒",
+        "name": "醉仙酒馆",
+        "color": "#9e3f32"
+      },
+      {
+        "sign": "茶",
+        "name": "清风茶肆",
+        "color": "#3f7054"
+      },
+      {
+        "sign": "布",
+        "name": "锦绣布庄",
+        "color": "#526b9d"
+      },
+      {
+        "sign": "药",
+        "name": "回春药铺",
+        "color": "#527443"
+      },
+      {
+        "sign": "客栈",
+        "name": "悦来客栈",
+        "color": "#935c35"
+      },
+      {
+        "sign": "米",
+        "name": "丰年米行",
+        "color": "#a37b35"
+      },
+      {
+        "sign": "瓷",
+        "name": "青瓷雅集",
+        "color": "#39747b"
+      },
+      {
+        "sign": "书",
+        "name": "文渊书肆",
+        "color": "#695183"
+      }
     ],
     "xOffset": 10.1,
     "doorInset": 1.7,
     "insideInset": 0.45,
-    "zPositions": [-175, -153, -131, -72, -50, 50, 72, 131, 153, 175],
+    "zPositions": [
+      -175,
+      -153,
+      -131,
+      -72,
+      -50,
+      50,
+      72,
+      131,
+      153,
+      175
+    ],
     "eastTypeShift": 3,
-    "keeper": { "xOffset": 7.85, "zOffset": 0.75 },
-    "customer": { "xOffset": 5.7, "zOffset": -0.75 },
-    "exclusion": { "x": -16, "z": 16, "r": 11 }
+    "keeper": {
+      "xOffset": 7.85,
+      "zOffset": 0.75
+    },
+    "customer": {
+      "xOffset": 5.7,
+      "zOffset": -0.75
+    },
+    "exclusion": {
+      "x": -16,
+      "z": 16,
+      "r": 11
+    }
   },
-
   "npcs": {
     "villagers": {
       "count": 26,
-      "kinds": ["manA", "woman", "manB", "manA", "woman", "manB", "manA", "woman", "manB", "manA", "woman", "manB"],
+      "kinds": [
+        "manA",
+        "woman",
+        "manB",
+        "manA",
+        "woman",
+        "manB",
+        "manA",
+        "woman",
+        "manB",
+        "manA",
+        "woman",
+        "manB"
+      ],
       "keeperCount": 6,
       "travelerFrom": 16,
       "randomColors": true,
       "shopVisitTime": 2.0,
       "doorDwell": 0.6,
       "doorWalkTime": 0.85,
-      "speed": { "base": 0.7, "step": 0.09, "cycle": 5, "travelerScale": 1.1 },
+      "speed": {
+        "base": 0.7,
+        "step": 0.09,
+        "cycle": 5,
+        "travelerScale": 1.1
+      },
       "radius": 4,
       "routeStep": 3,
       "gateInward": 3.5,
-      "walkClip": "Walk", "idleClip": "Idle"
+      "walkClip": "Walk",
+      "idleClip": "Idle"
     },
     "gates": [
-      { "x": 0, "z": 258.5, "nx": 0, "nz": 1, "label": "南门" },
-      { "x": 0, "z": -258.5, "nx": 0, "nz": -1, "label": "北门" },
-      { "x": 258.5, "z": 0, "nx": 1, "nz": 0, "label": "东门" },
-      { "x": -258.5, "z": 0, "nx": -1, "nz": 0, "label": "西门" }
+      {
+        "x": 0,
+        "z": 258.5,
+        "nx": 0,
+        "nz": 1,
+        "label": "南门"
+      },
+      {
+        "x": 0,
+        "z": -258.5,
+        "nx": 0,
+        "nz": -1,
+        "label": "北门"
+      },
+      {
+        "x": 258.5,
+        "z": 0,
+        "nx": 1,
+        "nz": 0,
+        "label": "东门"
+      },
+      {
+        "x": -258.5,
+        "z": 0,
+        "nx": -1,
+        "nz": 0,
+        "label": "西门"
+      }
     ],
     "flow": {
       "enabled": true,
       "poolSize": 22,
       "initialActive": 14,
-      "spawnInterval": [1.0, 2.0],
-      "exitHold": [0.8, 1.8],
-      "walkSpeed": [0.9, 1.3],
-      "shopStops": [2, 3],
+      "spawnInterval": [
+        1.0,
+        2.0
+      ],
+      "exitHold": [
+        0.8,
+        1.8
+      ],
+      "walkSpeed": [
+        0.9,
+        1.3
+      ],
+      "shopStops": [
+        2,
+        3
+      ],
       "randomColors": true,
       "exitOtherGate": 0.35
     },
     "visitPoints": [
-      { "id": "well", "customer": { "x": 0, "z": 2.2 }, "keeper": { "x": 0, "z": -1.5 }, "sign": "取水" },
-      { "id": "pavilion", "customer": { "x": -7, "z": 17 }, "keeper": { "x": -10, "z": 20 }, "sign": "观景" }
+      {
+        "id": "well",
+        "customer": {
+          "x": 0,
+          "z": 2.2
+        },
+        "keeper": {
+          "x": 0,
+          "z": -1.5
+        },
+        "sign": "取水"
+      },
+      {
+        "id": "pavilion",
+        "customer": {
+          "x": -7,
+          "z": 17
+        },
+        "keeper": {
+          "x": -10,
+          "z": 20
+        },
+        "sign": "观景"
+      }
     ],
     "animals": [
-      { "kind": "cow", "x": 20, "z": -20 }, { "kind": "cow", "x": -20, "z": -20 },
-      { "kind": "sheep", "x": 14, "z": -22 }, { "kind": "sheep", "x": -14, "z": -22 },
-      { "kind": "pig", "x": 22, "z": 8 }, { "kind": "pig", "x": -22, "z": 10 },
-      { "kind": "sheep", "x": 18, "z": 20 }, { "kind": "cow", "x": -18, "z": 18 }
+      {
+        "kind": "cow",
+        "x": 20,
+        "z": -20
+      },
+      {
+        "kind": "cow",
+        "x": -20,
+        "z": -20
+      },
+      {
+        "kind": "sheep",
+        "x": 14,
+        "z": -22
+      },
+      {
+        "kind": "sheep",
+        "x": -14,
+        "z": -22
+      },
+      {
+        "kind": "pig",
+        "x": 22,
+        "z": 8
+      },
+      {
+        "kind": "pig",
+        "x": -22,
+        "z": 10
+      },
+      {
+        "kind": "sheep",
+        "x": 18,
+        "z": 20
+      },
+      {
+        "kind": "cow",
+        "x": -18,
+        "z": 18
+      }
     ],
-    "animalSpeed": { "base": 0.45, "range": 0.2 },
-    "animalRadius": { "base": 5, "range": 4 },
-    "smalls": [
-      { "kind": "pug", "x": 6, "z": 10 }, { "kind": "pug", "x": -10, "z": 6 },
-      { "kind": "fox", "x": 24, "z": -6 }, { "kind": "fox", "x": -24, "z": -10 }
-    ],
-    "smallSpeed": { "base": 0.5, "range": 0.25 },
-    "smallRadius": { "base": 7, "range": 5 }
-  },
-
-  "player": {
-    "physics": {
-      "radius": 0.38, "eyeHeight": 1.66,
-      "walkSpeed": 2.4, "runSpeed": 5.2, "climbSpeed": 2.6,
-      "jumpSpeed": 6.4, "gravity": 20
+    "animalSpeed": {
+      "base": 0.45,
+      "range": 0.2
     },
-    "settings": {
-      "sensitivity": 0.8, "fov": 60, "walkSpeed": 2.4,
-      "invertY": false, "fog": false, "quality": "medium",
-      "weather": "clear", "comfort": false, "showFps": true
+    "animalRadius": {
+      "base": 5,
+      "range": 4
+    },
+    "smalls": [
+      {
+        "kind": "pug",
+        "x": 6,
+        "z": 10
+      },
+      {
+        "kind": "pug",
+        "x": -10,
+        "z": 6
+      },
+      {
+        "kind": "fox",
+        "x": 24,
+        "z": -6
+      },
+      {
+        "kind": "fox",
+        "x": -24,
+        "z": -10
+      }
+    ],
+    "smallSpeed": {
+      "base": 0.5,
+      "range": 0.25
+    },
+    "smallRadius": {
+      "base": 7,
+      "range": 5
     }
   },
-
+  "player": {
+    "physics": {
+      "radius": 0.38,
+      "eyeHeight": 1.66,
+      "walkSpeed": 2.4,
+      "runSpeed": 5.2,
+      "climbSpeed": 2.6,
+      "jumpSpeed": 6.4,
+      "gravity": 20
+    },
+    "settings": {
+      "sensitivity": 0.8,
+      "fov": 60,
+      "walkSpeed": 2.4,
+      "invertY": false,
+      "fog": false,
+      "quality": "medium",
+      "weather": "clear",
+      "comfort": false,
+      "showFps": true
+    }
+  },
   "characters": {
     "defaultPalette": 0,
     "uniqueOutfits": true,
     "palettes": [
-      { "name": "布衣青衫", "colors": { "skin": "0xd8a97f", "hair": "0x2b1f18", "eyes": "0x2a2a2a", "shirt": "0x496a86", "pants": "0x3d4250", "socks": "0xe8e2d6", "shoes": "0x2c2622" } },
-      { "name": "靛蓝短褐", "colors": { "skin": "0xd8a97f", "hair": "0x1d1714", "eyes": "0x22242a", "shirt": "0x35527a", "pants": "0x2f3b52", "socks": "0xddd8cc", "shoes": "0x24201d" } },
-      { "name": "茶肆伙计", "colors": { "skin": "0xc58d64", "hair": "0x241a15", "eyes": "0x2a2622", "shirt": "0x7a5233", "pants": "0x4a3b30", "socks": "0xe0d8c8", "shoes": "0x2f2822" } },
-      { "name": "客栈掌柜", "colors": { "skin": "0xe0b795", "hair": "0x554b42", "eyes": "0x2a2a2a", "shirt": "0x7c3b32", "pants": "0x3a3230", "socks": "0xe8e4dc", "shoes": "0x2b2520" } },
-      { "name": "青衫书生", "colors": { "skin": "0xe5b793", "hair": "0x1a1512", "eyes": "0x24242a", "shirt": "0x8fa6a0", "pants": "0x4b5b63", "socks": "0xf0ece4", "shoes": "0x2e2824" } },
-      { "name": "田间农妇", "colors": { "skin": "0xa97450", "hair": "0x201814", "eyes": "0x26221f", "shirt": "0x4a6b52", "pants": "0x3d4a3c", "socks": "0xd8d0c0", "shoes": "0x2a251f" } },
-      { "name": "绸缎商贾", "colors": { "skin": "0xd6a279", "hair": "0x1f1915", "eyes": "0x2b2622", "shirt": "0x6c4a72", "pants": "0x33313a", "socks": "0xe6e0d4", "shoes": "0x241f1c" } }
+      {
+        "name": "布衣青衫",
+        "colors": {
+          "skin": "0xd8a97f",
+          "hair": "0x2b1f18",
+          "eyes": "0x2a2a2a",
+          "shirt": "0x496a86",
+          "pants": "0x3d4250",
+          "socks": "0xe8e2d6",
+          "shoes": "0x2c2622"
+        }
+      },
+      {
+        "name": "靛蓝短褐",
+        "colors": {
+          "skin": "0xd8a97f",
+          "hair": "0x1d1714",
+          "eyes": "0x22242a",
+          "shirt": "0x35527a",
+          "pants": "0x2f3b52",
+          "socks": "0xddd8cc",
+          "shoes": "0x24201d"
+        }
+      },
+      {
+        "name": "茶肆伙计",
+        "colors": {
+          "skin": "0xc58d64",
+          "hair": "0x241a15",
+          "eyes": "0x2a2622",
+          "shirt": "0x7a5233",
+          "pants": "0x4a3b30",
+          "socks": "0xe0d8c8",
+          "shoes": "0x2f2822"
+        }
+      },
+      {
+        "name": "客栈掌柜",
+        "colors": {
+          "skin": "0xe0b795",
+          "hair": "0x554b42",
+          "eyes": "0x2a2a2a",
+          "shirt": "0x7c3b32",
+          "pants": "0x3a3230",
+          "socks": "0xe8e4dc",
+          "shoes": "0x2b2520"
+        }
+      },
+      {
+        "name": "青衫书生",
+        "colors": {
+          "skin": "0xe5b793",
+          "hair": "0x1a1512",
+          "eyes": "0x24242a",
+          "shirt": "0x8fa6a0",
+          "pants": "0x4b5b63",
+          "socks": "0xf0ece4",
+          "shoes": "0x2e2824"
+        }
+      },
+      {
+        "name": "田间农妇",
+        "colors": {
+          "skin": "0xa97450",
+          "hair": "0x201814",
+          "eyes": "0x26221f",
+          "shirt": "0x4a6b52",
+          "pants": "0x3d4a3c",
+          "socks": "0xd8d0c0",
+          "shoes": "0x2a251f"
+        }
+      },
+      {
+        "name": "绸缎商贾",
+        "colors": {
+          "skin": "0xd6a279",
+          "hair": "0x1f1915",
+          "eyes": "0x2b2622",
+          "shirt": "0x6c4a72",
+          "pants": "0x33313a",
+          "socks": "0xe6e0d4",
+          "shoes": "0x241f1c"
+        }
+      }
     ],
     "randomPools": {
-      "skin": ["0xf0cfae", "0xe8c39e", "0xd8a97f", "0xc58d64", "0xb07d55", "0x9c6647", "0x7d4f34", "0x663f2b"],
-      "hair": ["0x15110e", "0x241a14", "0x332419", "0x4a3526", "0x5c4634", "0x6f5b48", "0x8a7a68"],
-      "eyes": ["0x201c18", "0x2b2622", "0x333a42", "0x4a3a2a"],
-      "shirt": ["0x496a86", "0x35527a", "0x7a5233", "0x7c3b32", "0x8fa6a0", "0x4a6b52", "0x6c4a72", "0xa37b35", "0x39747b", "0x695183", "0x8c5a4a", "0x556b7d",
-        "0x2f4f6f", "0x6b8fb4", "0x9fb3c8", "0x3a5f56", "0x6f8f6a", "0x93a86b", "0xb8a15a", "0xc08a4a", "0x9c5a3c", "0xa8544d",
-        "0xc2705e", "0x8e3b4e", "0x5b4a6b", "0x7a6a8c", "0x4a4a52", "0x6e6a63", "0x9a9082", "0xcbb79a", "0xe0d5c1", "0x3d6b78", "0x2e5a4f", "0x7d4b3a"],
-      "pants": ["0x3d4250", "0x2f3b52", "0x4a3b30", "0x3a3230", "0x4b5b63", "0x3d4a3c", "0x33313a", "0x4a4038", "0x2b333c", "0x5a5148", "0x6b6258", "0x394a46", "0x4a3f52", "0x55504a"],
-      "socks": ["0xe8e2d6", "0xddd8cc", "0xe0d8c8", "0xd8d0c0", "0xbfc7cf"],
-      "shoes": ["0x2c2622", "0x24201d", "0x2f2822", "0x2b2520", "0x352b24"]
+      "skin": [
+        "0xf0cfae",
+        "0xe8c39e",
+        "0xd8a97f",
+        "0xc58d64",
+        "0xb07d55",
+        "0x9c6647",
+        "0x7d4f34",
+        "0x663f2b"
+      ],
+      "hair": [
+        "0x15110e",
+        "0x241a14",
+        "0x332419",
+        "0x4a3526",
+        "0x5c4634",
+        "0x6f5b48",
+        "0x8a7a68"
+      ],
+      "eyes": [
+        "0x201c18",
+        "0x2b2622",
+        "0x333a42",
+        "0x4a3a2a"
+      ],
+      "shirt": [
+        "0x496a86",
+        "0x35527a",
+        "0x7a5233",
+        "0x7c3b32",
+        "0x8fa6a0",
+        "0x4a6b52",
+        "0x6c4a72",
+        "0xa37b35",
+        "0x39747b",
+        "0x695183",
+        "0x8c5a4a",
+        "0x556b7d",
+        "0x2f4f6f",
+        "0x6b8fb4",
+        "0x9fb3c8",
+        "0x3a5f56",
+        "0x6f8f6a",
+        "0x93a86b",
+        "0xb8a15a",
+        "0xc08a4a",
+        "0x9c5a3c",
+        "0xa8544d",
+        "0xc2705e",
+        "0x8e3b4e",
+        "0x5b4a6b",
+        "0x7a6a8c",
+        "0x4a4a52",
+        "0x6e6a63",
+        "0x9a9082",
+        "0xcbb79a",
+        "0xe0d5c1",
+        "0x3d6b78",
+        "0x2e5a4f",
+        "0x7d4b3a"
+      ],
+      "pants": [
+        "0x3d4250",
+        "0x2f3b52",
+        "0x4a3b30",
+        "0x3a3230",
+        "0x4b5b63",
+        "0x3d4a3c",
+        "0x33313a",
+        "0x4a4038",
+        "0x2b333c",
+        "0x5a5148",
+        "0x6b6258",
+        "0x394a46",
+        "0x4a3f52",
+        "0x55504a"
+      ],
+      "socks": [
+        "0xe8e2d6",
+        "0xddd8cc",
+        "0xe0d8c8",
+        "0xd8d0c0",
+        "0xbfc7cf"
+      ],
+      "shoes": [
+        "0x2c2622",
+        "0x24201d",
+        "0x2f2822",
+        "0x2b2520",
+        "0x352b24"
+      ]
     }
   },
-
   "characterAppearance": {
     "ages": {
-      "child":  { "weight": 0.14, "scale": { "x": 0.68, "y": 0.62, "z": 0.68 }, "hair": "0x2a1d14" },
-      "teen":   { "weight": 0.16, "scale": { "x": 0.89, "y": 0.86, "z": 0.89 }, "hair": "0x241910" },
-      "adult":  { "weight": 0.50, "scale": { "x": 1.00, "y": 1.00, "z": 1.00 }, "hair": "0x1d150f" },
-      "senior": { "weight": 0.20, "scale": { "x": 0.98, "y": 0.95, "z": 0.98 }, "hair": "0xa89e92" }
+      "child": {
+        "weight": 0.14,
+        "scale": {
+          "x": 0.68,
+          "y": 0.62,
+          "z": 0.68
+        },
+        "hair": "0x2a1d14"
+      },
+      "teen": {
+        "weight": 0.16,
+        "scale": {
+          "x": 0.89,
+          "y": 0.86,
+          "z": 0.89
+        },
+        "hair": "0x241910"
+      },
+      "adult": {
+        "weight": 0.5,
+        "scale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "hair": "0x1d150f"
+      },
+      "senior": {
+        "weight": 0.2,
+        "scale": {
+          "x": 0.98,
+          "y": 0.95,
+          "z": 0.98
+        },
+        "hair": "0xa89e92"
+      }
     },
     "outfits": [
-      { "name": "布衣", "sash": "0x6b5a42", "headwear": "none" },
-      { "name": "短褐", "sash": "0x4a3b30", "headwear": "none" },
-      { "name": "商贾", "sash": "0x8c6a2f", "headwear": "skullcap" },
-      { "name": "书生", "sash": "0x4f5f6b", "headwear": "square" },
-      { "name": "伙计", "sash": "0x7a5233", "headwear": "none" },
-      { "name": "农户", "sash": "0x5c6b48", "headwear": "conical" }
+      {
+        "name": "布衣",
+        "sash": "0x6b5a42",
+        "headwear": "none"
+      },
+      {
+        "name": "短褐",
+        "sash": "0x4a3b30",
+        "headwear": "none"
+      },
+      {
+        "name": "商贾",
+        "sash": "0x8c6a2f",
+        "headwear": "skullcap"
+      },
+      {
+        "name": "书生",
+        "sash": "0x4f5f6b",
+        "headwear": "square"
+      },
+      {
+        "name": "伙计",
+        "sash": "0x7a5233",
+        "headwear": "none"
+      },
+      {
+        "name": "农户",
+        "sash": "0x5c6b48",
+        "headwear": "conical"
+      }
     ],
     "headwear": {
-      "conical":  { "color": "0x9a8256", "accent": "0x6b5638" },
-      "skullcap": { "color": "0x3a3128", "accent": "0x1a1410" },
-      "square":   { "color": "0x39434a", "accent": "0x242a2e" },
-      "scarf":    { "color": "0x5b4a38", "accent": "0x33291f" }
+      "conical": {
+        "color": "0x9a8256",
+        "accent": "0x6b5638"
+      },
+      "skullcap": {
+        "color": "0x3a3128",
+        "accent": "0x1a1410"
+      },
+      "square": {
+        "color": "0x39434a",
+        "accent": "0x242a2e"
+      },
+      "scarf": {
+        "color": "0x5b4a38",
+        "accent": "0x33291f"
+      }
     }
   },
-
   "assets": {
     "base": "./assets/models/",
     "concurrency": 3,
     "models": {
-      "house1": { "file": "House1.fbx", "targetHeight": 4.6 },
-      "house2": { "file": "House2.fbx", "targetHeight": 5.0 },
-      "building4": { "file": "Building4.fbx", "targetHeight": 10.2, "targetFootprint": 5.2 },
-      "building2s": { "file": "Building2_Small.fbx", "targetHeight": 4.2, "targetFootprint": 4.8 },
-      "well": { "file": "Well.fbx", "targetHeight": 1.25 },
-      "windmill": { "file": "Windmill.fbx", "targetHeight": 8.0 },
-      "barn": { "file": "Barn.fbx", "targetHeight": 4.8 },
-      "coop": { "file": "ChickenCoop.fbx", "targetHeight": 1.6 },
-      "cow": { "file": "Cow.fbx", "targetHeight": 1.45, "charFacePlusX": true, "fixFeetRig": true },
-      "horse": { "file": "Horse.fbx", "targetHeight": 1.9, "charFacePlusX": true, "fixFeetRig": true },
-      "sheep": { "file": "Sheep.fbx", "targetHeight": 0.85, "charFacePlusX": true, "fixFeetRig": true },
-      "pig": { "file": "Pig.fbx", "targetHeight": 0.65, "charFacePlusX": true, "fixFeetRig": true },
-      "pug": { "file": "Pug.fbx", "targetHeight": 0.35, "charFacePlusX": true, "fixFeetRig": true },
-      "fox": { "file": "animal_fox.fbx", "targetHeight": 0.5, "charFacePlusX": true, "modelYaw": "PI", "fixFeetRig": true },
-      "bird": { "file": "animal_bird.fbx", "targetHeight": 0.3, "charFacePlusX": true },
-      "manA": { "file": "char_male_casual.fbx", "targetHeight": 1.75, "charFacePlusX": true, "fixFeetRig": true },
-      "manB": { "file": "char_male_longsleeve.fbx", "targetHeight": 1.75, "feetScale": 0.8, "charFacePlusX": true, "fixFeetRig": true },
-      "woman": { "file": "char_female_casual.fbx", "targetHeight": 1.68, "feetScale": 0.8, "charFacePlusX": true, "fixFeetRig": true }
+      "house1": {
+        "file": "House1.fbx",
+        "targetHeight": 4.6
+      },
+      "house2": {
+        "file": "House2.fbx",
+        "targetHeight": 5.0
+      },
+      "building4": {
+        "file": "Building4.fbx",
+        "targetHeight": 10.2,
+        "targetFootprint": 5.2
+      },
+      "building2s": {
+        "file": "Building2_Small.fbx",
+        "targetHeight": 4.2,
+        "targetFootprint": 4.8
+      },
+      "well": {
+        "file": "Well.fbx",
+        "targetHeight": 1.25
+      },
+      "windmill": {
+        "file": "Windmill.fbx",
+        "targetHeight": 8.0
+      },
+      "barn": {
+        "file": "Barn.fbx",
+        "targetHeight": 4.8
+      },
+      "coop": {
+        "file": "ChickenCoop.fbx",
+        "targetHeight": 1.6
+      },
+      "cow": {
+        "file": "Cow.fbx",
+        "targetHeight": 1.45,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "horse": {
+        "file": "Horse.fbx",
+        "targetHeight": 1.9,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "sheep": {
+        "file": "Sheep.fbx",
+        "targetHeight": 0.85,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "pig": {
+        "file": "Pig.fbx",
+        "targetHeight": 0.65,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "pug": {
+        "file": "Pug.fbx",
+        "targetHeight": 0.35,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "fox": {
+        "file": "animal_fox.fbx",
+        "targetHeight": 0.5,
+        "charFacePlusX": true,
+        "modelYaw": "PI",
+        "fixFeetRig": true
+      },
+      "bird": {
+        "file": "animal_bird.fbx",
+        "targetHeight": 0.3,
+        "charFacePlusX": true
+      },
+      "manA": {
+        "file": "char_male_casual.fbx",
+        "targetHeight": 1.75,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "manB": {
+        "file": "char_male_longsleeve.fbx",
+        "targetHeight": 1.75,
+        "feetScale": 0.8,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "woman": {
+        "file": "char_female_casual.fbx",
+        "targetHeight": 1.68,
+        "feetScale": 0.8,
+        "charFacePlusX": true,
+        "fixFeetRig": true
+      },
+      "flat": {
+        "file": "flat.fbx",
+        "targetHeight": 16,
+        "targetFootprint": 9
+      },
+      "flat2": {
+        "file": "flat2.fbx",
+        "targetHeight": 13,
+        "targetFootprint": 9
+      },
+      "bank": {
+        "file": "bank.fbx",
+        "targetHeight": 11,
+        "targetFootprint": 11
+      },
+      "hospital": {
+        "file": "hospital.fbx",
+        "targetHeight": 12,
+        "targetFootprint": 12
+      },
+      "shop": {
+        "file": "shop.fbx",
+        "targetHeight": 5.2,
+        "targetFootprint": 7
+      },
+      "qhouse1": {
+        "file": "qhouse1_2017.fbx",
+        "targetHeight": 5.0,
+        "targetFootprint": 7
+      },
+      "qhouse2": {
+        "file": "qhouse2.fbx",
+        "targetHeight": 5.2,
+        "targetFootprint": 7
+      },
+      "qhouse3": {
+        "file": "qhouse3.fbx",
+        "targetHeight": 6.0,
+        "targetFootprint": 8
+      },
+      "qhouse4": {
+        "file": "qhouse4.fbx",
+        "targetHeight": 4.8,
+        "targetFootprint": 7
+      },
+      "qhouse5": {
+        "file": "qhouse5.fbx",
+        "targetHeight": 5.4,
+        "targetFootprint": 7
+      },
+      "temple": {
+        "file": "japanesetemple.fbx",
+        "targetHeight": 9,
+        "targetFootprint": 12
+      },
+      "mhouse": {
+        "file": "medieval_house.fbx",
+        "targetHeight": 5.0,
+        "targetFootprint": 6
+      },
+      "tower1": {
+        "file": "building1_large.fbx",
+        "targetHeight": 22,
+        "targetFootprint": 11
+      },
+      "tower2": {
+        "file": "building2_large.fbx",
+        "targetHeight": 18,
+        "targetFootprint": 10
+      },
+      "tower3": {
+        "file": "building3_big.fbx",
+        "targetHeight": 15,
+        "targetFootprint": 10
+      }
     }
   }
 }
