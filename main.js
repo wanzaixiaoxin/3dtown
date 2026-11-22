@@ -80,6 +80,13 @@ let view = 'top';
 let running = false;
 let currentTime = 'noon';
 
+// 航拍巡航状态：auto=true 沿预设航线自动飞行，任意输入切回手动
+const air = {
+  yaw: Math.PI * 0.25, pitch: -0.42,
+  pos: new THREE.Vector3(140, 120, 140),
+  auto: true, t: 0, speed: 26,
+};
+
 const player = {
   pos: new THREE.Vector3(0, 0, 14),
   vel: new THREE.Vector3(),
@@ -209,6 +216,7 @@ function bindUI() {
   // view
   document.getElementById('btnTop').addEventListener('click', () => setView('top'));
   document.getElementById('btnFp').addEventListener('click', () => setView('fp'));
+  document.getElementById('btnAir').addEventListener('click', () => setView('air'));
 
   // time of day
   document.querySelectorAll('[data-time]').forEach(btn => {
@@ -407,18 +415,42 @@ function toggleBuilder() {
 // ===========================================================================
 //  VIEW SWITCH
 // ===========================================================================
-function toggleView() { setView(view === 'top' ? 'fp' : 'top'); }
+function toggleView() {
+  // V 键三态循环：俯视 → 第一人称 → 航拍 → 俯视
+  setView(view === 'top' ? 'fp' : view === 'fp' ? 'air' : 'top');
+}
 
 function setView(v) {
   view = v;
   document.getElementById('btnTop').classList.toggle('active', v === 'top');
   document.getElementById('btnFp').classList.toggle('active', v === 'fp');
+  const btnAir = document.getElementById('btnAir');
+  if (btnAir) btnAir.classList.toggle('active', v === 'air');
   document.body.classList.toggle('fp', v === 'fp');
 
   if (v === 'top') {
     orbit.enabled = true;
     if (document.pointerLockElement) document.exitPointerLock();
     if (!isBuilderEnabled()) frameTopDown();
+  } else if (v === 'air') {
+    // 航拍：从当前相机位平滑接管，自动巡航；松开所有移动键避免残留速度
+    for (const k of Object.keys(keys)) keys[k] = false;
+    if (document.pointerLockElement) document.exitPointerLock();
+    orbit.enabled = false;
+    const pos = camera.position;
+    // 相机太高或太远时，回落到城市上空合适的巡航高度
+    if (pos.y < 30 || pos.y > 260 || Math.hypot(pos.x, pos.z) > 420) {
+      air.pos.set(140, 120, 140);
+      air.yaw = Math.PI * 0.25; air.pitch = -0.38;
+    } else {
+      air.pos.copy(pos);
+      // 从 orbit 视角反推朝向，保持视线连续
+      const dir = new THREE.Vector3();
+      camera.getWorldDirection(dir);
+      air.yaw = Math.atan2(-dir.x, -dir.z);
+      air.pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -1, 1));
+    }
+    air.auto = true; air.t = 0;
   } else {
     orbit.enabled = false;
     player.climbing = false;
@@ -508,6 +540,7 @@ function groundHeightAt(x, z, curY) {
 // ===========================================================================
 function updatePlayer(dt) {
   if (isBuilderEnabled()) return;   // frozen during build mode
+  if (view === 'air') { updateHUD(); return; }   // 航拍时相机由 updateAirCamera 驱动
   const forward = _v1.set(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   const right = _v2.set(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
   const wish = new THREE.Vector3();
@@ -597,9 +630,84 @@ function updateCamera(dt) {
       -Math.cos(player.lookYaw) * Math.cos(player.lookPitch)
     );
     camera.lookAt(_fpEye.x + _fpDir.x, _fpEye.y + _fpDir.y, _fpEye.z + _fpDir.z);
+  } else if (view === 'air') {
+    updateAirCamera(dt);
   } else {
     orbit.update();
   }
+}
+
+// ---------------------------------------------------------------------------
+//  航拍巡航：auto 模式沿平滑环线绕城飞行（视线扫过各功能区）；
+//  任意 WASD/QE/鼠标输入立即切手动，2s 无输入后恢复自动。
+// ---------------------------------------------------------------------------
+const AIR_CITY_R = 180;          // 环线半径（覆盖内环全部街坊）
+const AIR_HEIGHT = 95;           // 巡航基准高度
+function updateAirCamera(dt) {
+  const wish = _v1.set(0, 0, 0);
+  const forward = _v2.set(-Math.sin(air.yaw), 0, -Math.cos(air.yaw));
+  const right = _v2.clone().set(Math.cos(air.yaw), 0, -Math.sin(air.yaw));
+  let input = false;
+  if (keys['KeyW'] || keys['ArrowUp']) { wish.add(forward); input = true; }
+  if (keys['KeyS'] || keys['ArrowDown']) { wish.sub(forward); input = true; }
+  if (keys['KeyD'] || keys['ArrowRight']) { wish.add(right); input = true; }
+  if (keys['KeyA'] || keys['ArrowLeft']) { wish.sub(right); input = true; }
+  let vy = 0;
+  if (keys['Space']) { vy += 1; input = true; }
+  if (keys['KeyC'] || keys['ShiftLeft'] && keys['KeyC']) { vy -= 1; input = true; }
+  if (keys['ShiftLeft'] || keys['ShiftRight']) input = true;  // shift 加速
+
+  if (input) {
+    if (air.auto) { air.auto = false; air.pos.copy(camera.position); }
+    air.idle = 0;
+  } else if (!air.auto) {
+    air.idle = (air.idle || 0) + dt;
+    if (air.idle > 2) { air.auto = true; air.t = 0; }
+  }
+
+  const speed = air.speed * ((keys['ShiftLeft'] || keys['ShiftRight']) ? 2.2 : 1);
+  if (air.auto) {
+    // 自动航线：绕城缓飞 + 缓慢升降，机头始终朝前进方向略下倾
+    air.t += dt * 0.04;
+    const a = air.t * Math.PI * 2;
+    const r = AIR_CITY_R + Math.sin(air.t * Math.PI * 3) * 25;
+    const targetX = Math.cos(a) * r;
+    const targetZ = Math.sin(a) * r;
+    const targetY = AIR_HEIGHT + Math.sin(air.t * Math.PI * 5) * 18;
+    // 平滑追随航线点（似无人机跟拍）
+    const k = Math.min(1, dt * 0.9);
+    air.pos.x += (targetX - air.pos.x) * k;
+    air.pos.z += (targetZ - air.pos.z) * k;
+    air.pos.y += (targetY - air.pos.y) * k;
+    // 朝向 = 航线切线方向 + 轻微下倾看城
+    const tx = -Math.sin(a) * r, tz = Math.cos(a) * r;
+    const targetYaw = Math.atan2(-tx, -tz);
+    const targetPitch = -0.34;
+    air.yaw += shortAngle(air.yaw, targetYaw) * Math.min(1, dt * 1.2);
+    air.pitch += (targetPitch - air.pitch) * Math.min(1, dt * 1.2);
+  } else {
+    // 手动飞行：惯性平移 + 升降
+    const moving = wish.lengthSq() > 1e-4;
+    if (moving) wish.normalize();
+    air.pos.addScaledVector(wish, speed * dt);
+    air.pos.y = Math.max(12, Math.min(320, air.pos.y + vy * speed * 0.7 * dt));
+    // 城界软约束：飞太远缓缓拉回
+    const dist = Math.hypot(air.pos.x, air.pos.z);
+    if (dist > 430) {
+      air.pos.x *= 430 / dist; air.pos.z *= 430 / dist;
+    }
+  }
+  camera.position.copy(air.pos);
+  _fpDir.set(
+    -Math.sin(air.yaw) * Math.cos(air.pitch),
+    Math.sin(air.pitch),
+    -Math.cos(air.yaw) * Math.cos(air.pitch)
+  );
+  camera.lookAt(air.pos.x + _fpDir.x, air.pos.y + _fpDir.y, air.pos.z + _fpDir.z);
+}
+
+function shortAngle(from, to) {
+  return Math.atan2(Math.sin(to - from), Math.cos(to - from));
 }
 
 // ===========================================================================
@@ -611,15 +719,16 @@ const mmCtx = minimap.getContext('2d');
 let mmFrame = 0;
 
 function updateHUD() {
-  document.getElementById('statMode').textContent = view === 'top' ? '俯视' : '第一人称';
+  document.getElementById('statMode').textContent = view === 'top' ? '俯视' : view === 'air' ? '航拍' : '第一人称';
   document.getElementById('statTime').textContent = getTimeLabel();
   let state = '驻足';
-  if (player.climbing) state = '攀爬';
+  if (view === 'air') state = air.auto ? '自动巡航' : '手动飞行';
+  else if (player.climbing) state = '攀爬';
   else if (!player.onGround) state = '跳跃';
   else if (running && (Math.abs(player.vel.x)+Math.abs(player.vel.z) > 0.5)) state = '奔跑';
   else if (Math.abs(player.vel.x)+Math.abs(player.vel.z) > 0.3) state = '行走';
   document.getElementById('statState').textContent = state;
-  document.getElementById('statY').textContent = player.pos.y.toFixed(1);
+  document.getElementById('statY').textContent = view === 'air' ? air.pos.y.toFixed(1) : player.pos.y.toFixed(1);
   document.getElementById('statNpc').textContent = npcs.length;
 }
 
