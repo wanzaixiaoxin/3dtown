@@ -275,6 +275,10 @@
         开启后：画面更清晰（高分辨率）、视角无延迟、去掉胶片颗粒与暗角、默认 FOV 75。适合容易晕 3D 的玩家。
       </p>
       <div class="toggle-row">
+        <span>显示帧率</span>
+        <label class="switch"><input type="checkbox" id="showFps" checked /><span class="slider-sw"></span></label>
+      </div>
+      <div class="toggle-row">
         <span>反转 Y 轴</span>
         <label class="switch"><input type="checkbox" id="invertY" /><span class="slider-sw"></span></label>
       </div>
@@ -304,7 +308,7 @@
       <span>视角 · <span class="mode" id="statMode">俯视</span></span>
       &nbsp;·&nbsp; <span>时辰 · <span id="statTime">正午</span></span>
       &nbsp;·&nbsp; <span>状态 · <span id="statState">驻足</span></span>
-      <div class="hint">FPS <span id="statFps">–</span> · 高度 <span id="statY">0.0</span>m · 人物 <span id="statNpc">0</span></div>
+      <div class="hint"><span id="fpsReadout">FPS <span id="statFps">–</span> · </span>高度 <span id="statY">0.0</span>m · 人物 <span id="statNpc">0</span></div>
     </div>
 
     <div id="builderUI">

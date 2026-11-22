@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { M, trackGeo } from './materials.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { colliders, inPlot } from './world.js';
-import { CITY_ROADS } from './districts.js';
+import { ALL_ROADS } from './districts.js';
 
 // --- shared wind uniforms (driven by main.js each frame) ---
 export const windUniforms = {
@@ -339,13 +339,13 @@ export function buildGrassField(parent) {
   inst.castShadow = true; inst.receiveShadow = true;
   const d = new THREE.Object3D();
   const color = new THREE.Color();
-  const TOWN = 96;
+  const TOWN = 260;
   let i = 0, guard = 0;
   while (i < COUNT && guard < COUNT * 6) {
     guard++;
     const x = (Math.random() - 0.5) * TOWN * 1.9;
     const z = (Math.random() - 0.5) * TOWN * 1.9;
-    if (CITY_ROADS.some(road => Math.abs(x - road) < 5.2) || CITY_ROADS.some(road => Math.abs(z - road) < 5.2)) continue;
+    if (ALL_ROADS.some(road => Math.abs(x - road) < 5.2) || ALL_ROADS.some(road => Math.abs(z - road) < 5.2)) continue;
     if (Math.hypot(x, z) < 11.5) continue;
     if (Math.hypot(x + 16, z - 16) < 8) continue;
     if (inPlot(x, z, 1)) continue;

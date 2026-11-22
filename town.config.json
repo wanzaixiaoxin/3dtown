@@ -6,7 +6,7 @@
   },
 
   "town": {
-    "half": 96,
+    "half": 260,
     "plot": { "x": 24.5, "z": 16, "halfW": 11, "halfD": 10 },
     "approachRoads": {
       "width": 7,
@@ -36,6 +36,7 @@
       { "x": 16, "z": -16, "r": 10 }
     ],
     "pavilion": {
+      "enabled": false,
       "x": 17, "z": 0, "w": 6.5, "d": 6.5, "h": 5.4,
       "roofH": 2.2, "rotY": "PI", "tier": { "w": 3.6, "h": 1.7, "d": 3.6 },
       "tierRoof": { "r": 3.8, "h": 1.7, "segments": 4 }
@@ -43,8 +44,7 @@
     "walls": { "height": 3.6, "thickness": 1.4, "inset": 5, "offset": 2.5 },
     "ladders": [
       { "x": 12, "z": "H-0.9", "baseY": 0, "topY": 3.6, "facing": { "x": 0, "z": -1 } },
-      { "x": "-H+0.9", "z": 10, "baseY": 0, "topY": 3.6, "facing": { "x": 1, "z": 0 } },
-      { "x": "PVX+3.5", "z": 0, "baseY": 0, "topY": 5.4, "facing": { "x": 1, "z": 0 } }
+      { "x": "-H+0.9", "z": 10, "baseY": 0, "topY": 3.6, "facing": { "x": 1, "z": 0 } }
     ],
     "heroes": [
       { "asset": "house1", "x": -8, "z": -9, "rotY": 0.35 },
@@ -62,14 +62,14 @@
 
   "scenery": {
     "exclusion": {
-      "roadHalf": 7,
+      "roadHalf": 12,
       "shopRow": { "center": 10, "band": 4, "minZ": 12 },
       "pond": { "x": -16, "z": 16, "r": 10 },
       "pavilion": { "x": -10, "z": 20, "r": 8 },
       "garden": { "x": 16, "z": -16, "r": 10 },
       "plotPad": 3
     },
-    "roads": { "width": 9, "plazaRadius": 11, "ringInner": 10.2, "ringOuter": 10.9, "cobbles": 900 },
+    "roads": { "width": 9, "vehicleWidth": 14, "plazaRadius": 11, "ringInner": 10.2, "ringOuter": 10.9, "cobbles": 900 },
     "treeSpots": [
       [-34, 12], [34, -12], [-12, 34], [12, -34], [-40, -30], [40, 30],
       [-20, 20], [20, -20], [-30, -14], [30, 14], [-8, 30], [8, -30],
@@ -123,8 +123,8 @@
       { "fn": "banner", "args": [-7.2, -6.4, "茶", 0.5] },
       { "fn": "banner", "args": [15.4, -3.2, "客栈", -1.2] },
       { "fn": "bronzeDing", "args": [3.6, 4.2, 0.9] },
-      { "fn": "stoneLion", "args": [-4.6, 93.2, 0.95, "PI"] },
-      { "fn": "stoneLion", "args": [4.6, 93.2, 0.95, "PI"] }
+      { "fn": "stoneLion", "args": [-4.6, 257.2, 0.95, "PI"] },
+      { "fn": "stoneLion", "args": [4.6, 257.2, 0.95, "PI"] }
     ]
   },
 
@@ -202,7 +202,7 @@
     "xOffset": 10.1,
     "doorInset": 1.7,
     "insideInset": 0.45,
-    "zPositions": [-56, -49, -42, -23, -16, 16, 23, 42, 49, 56],
+    "zPositions": [-175, -153, -131, -72, -50, 50, 72, 131, 153, 175],
     "eastTypeShift": 3,
     "keeper": { "xOffset": 7.85, "zOffset": 0.75 },
     "customer": { "xOffset": 5.7, "zOffset": -0.75 },
@@ -226,10 +226,10 @@
       "walkClip": "Walk", "idleClip": "Idle"
     },
     "gates": [
-      { "x": 0, "z": 94.5, "nx": 0, "nz": 1, "label": "南门" },
-      { "x": 0, "z": -94.5, "nx": 0, "nz": -1, "label": "北门" },
-      { "x": 94.5, "z": 0, "nx": 1, "nz": 0, "label": "东门" },
-      { "x": -94.5, "z": 0, "nx": -1, "nz": 0, "label": "西门" }
+      { "x": 0, "z": 258.5, "nx": 0, "nz": 1, "label": "南门" },
+      { "x": 0, "z": -258.5, "nx": 0, "nz": -1, "label": "北门" },
+      { "x": 258.5, "z": 0, "nx": 1, "nz": 0, "label": "东门" },
+      { "x": -258.5, "z": 0, "nx": -1, "nz": 0, "label": "西门" }
     ],
     "flow": {
       "enabled": true,
@@ -271,7 +271,7 @@
     "settings": {
       "sensitivity": 0.8, "fov": 60, "walkSpeed": 2.4,
       "invertY": false, "fog": false, "quality": "medium",
-      "weather": "clear", "comfort": false
+      "weather": "clear", "comfort": false, "showFps": true
     }
   },
 

@@ -262,6 +262,8 @@ export function M() {
       normalMap: pbrMap('stone_paving', 'normal', 18),
       normalScale: new THREE.Vector2(0.8, 0.8),
     }),
+    asphalt:     std({ color: 0x41464a, roughness: 0.96, metalness: 0, envMapIntensity: 0.08 }),
+    cement:      std({ color: 0x9a9d9c, roughness: 1.0, metalness: 0, envMapIntensity: 0.1 }),
     wallStone:   std({
       color: 0xb9bfc2, roughness: 1.0, envMapIntensity: 0.18,
       map: pbrMap('brick', 'color', 14) || stoneWallTex,

@@ -10,6 +10,7 @@ import {
 import { TOWN, colliders } from './world.js';
 import { SHOPS } from './commerce.js';
 import { makeAppearance, applyAppearance, footDropScale, disposeAppearance } from './appearance.js';
+import { isPedestrianAllowed } from './traffic.js';
 
 const NPC_CFG = CONFIG.npcs;
 const VILLAGER_CFG = NPC_CFG.villagers;
@@ -72,6 +73,7 @@ function freeSpot(x, z, lim) {
   return clampTown(x, z, lim);
 }
 function blocked(x, z, r = 0.35) {
+  if (!isPedestrianAllowed(x, z)) return true;
   for (const c of colliders) {
     if (c.water) continue;
     if (x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r) return true;
@@ -100,6 +102,7 @@ let nav = null;
 
 // 与 blocked() 的区别：水也算障碍（NPC 不该横穿池塘），且用导航专用膨胀半径。
 function navBlocked(x, z, r = 0.62) {
+  if (!isPedestrianAllowed(x, z)) return true;
   for (const c of colliders) {
     if (c.top !== undefined && c.top < 0.4 && !c.water) continue;
     const pad = r + (c.water ? 0.3 : 0);
@@ -1535,6 +1538,11 @@ export function updateNPCs(dt, nightAmount = 0) {
       [nx, nz] = separate(nx, nz, 0.45);
     }
     [nx, nz] = clampTown(nx, nz, npcLimit(n));
+    if (!isPedestrianAllowed(nx, nz)) {
+      if (isPedestrianAllowed(nx, n.pos.z)) nz = n.pos.z;
+      else if (isPedestrianAllowed(n.pos.x, nz)) nx = n.pos.x;
+      else { nx = n.pos.x; nz = n.pos.z; }
+    }
     n.pos.x = nx; n.pos.z = nz;
 
     for (const c of colliders) {

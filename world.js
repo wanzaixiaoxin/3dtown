@@ -8,7 +8,7 @@ import { M, trackGeo, disposables } from './materials.js';
 import { batchStatic } from './optimize.js';
 import { instantiate } from './assets.js';
 import { SHOPS, buildCommerce } from './commerce.js';
-import { CITY_ROADS, buildDistricts } from './districts.js';
+import { ALL_ROADS, buildDistricts } from './districts.js';
 import {
   buildGrassField, buildFlowerBed, buildWillow, buildAnimatedPond,
   buildPavilion, buildRockery, buildGarden, buildBush, flushFlowers,
@@ -85,9 +85,10 @@ function buildGround(parent) {
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), y = pos.getY(i);
-    const r = Math.sqrt(x * x + y * y) / (TOWN.half + 10);
-    const rim = Math.max(0, r - 0.75); // 0 in the middle, rises toward edges
-    let h = rim * rim * 26 * (0.6 + 0.4 * Math.sin(x * 0.15) * Math.cos(y * 0.12));
+    // 城区、环路和所有建筑地块保持水平；只在城墙外逐渐抬升。
+    const edge = Math.max(Math.abs(x), Math.abs(y));
+    const outer = Math.max(0, edge - (TOWN.half + 8));
+    let h = Math.pow(outer / 35, 2) * 18 * (0.6 + 0.4 * Math.sin(x * 0.15) * Math.cos(y * 0.12));
     // PlaneGeometry local +Y maps to world -Z after rotation; either axis near
     // centre is a road corridor, so flatten there with a soft shoulder.
     const axisDist = Math.min(Math.abs(x), Math.abs(y));
@@ -124,7 +125,7 @@ function addGrassPatches(parent) {
     guard++;
     const x = (Math.random() - 0.5) * TOWN.half * 1.85;
     const z = (Math.random() - 0.5) * TOWN.half * 1.85;
-    if (CITY_ROADS.some(road => Math.abs(x - road) < 5.2) || CITY_ROADS.some(road => Math.abs(z - road) < 5.2)) continue;
+    if (ALL_ROADS.some(road => Math.abs(x - road) < 5.2) || ALL_ROADS.some(road => Math.abs(z - road) < 5.2)) continue;
     if (Math.sqrt(x * x + z * z) < 11.5) continue;
     if (Math.hypot(x + 16, z - 16) < 8) continue; // pond
     d.position.set(x, 0.15, z);
@@ -151,7 +152,7 @@ function buildRoads(parent) {
   // main N-S and E-W stone lanes
   const mkLane = (w, len, rotY, name, offset) => {
     const g = trackGeo(new THREE.PlaneGeometry(w, len));
-    const lane = new THREE.Mesh(g, m.roadStone);
+    const lane = new THREE.Mesh(g, offset === 0 ? m.roadStone : m.asphalt);
     lane.rotation.x = -Math.PI / 2; lane.rotation.z = rotY;
     if (rotY === 0) lane.position.x = offset;
     else lane.position.z = offset;
@@ -159,12 +160,13 @@ function buildRoads(parent) {
     parent.add(lane);
     return lane;
   };
-  for (const offset of CITY_ROADS) {
-    mkLane(R.width, L, 0, `road-v-${offset}`, offset);
-    mkLane(R.width, L, Math.PI / 2, `road-h-${offset}`, offset);
+  for (const offset of ALL_ROADS) {
+    const width = offset === 0 ? R.width : (R.vehicleWidth || 7);
+    mkLane(width, L, 0, `road-v-${offset}`, offset);
+    mkLane(width, L, Math.PI / 2, `road-h-${offset}`, offset);
     walkableLanes.push(
-      { type: 'v', offset, half: halfWidth },
-      { type: 'h', offset, half: halfWidth },
+      { type: 'v', offset, half: width / 2 },
+      { type: 'h', offset, half: width / 2 },
     );
   }
 
@@ -252,7 +254,25 @@ function buildApproachRoads(parent) {
 //  HOUSE — realistic: stone base, plaster wall, timber frame, tiled hip roof
 //  All parts rest on ground (y=0). Registers a collider.
 // ---------------------------------------------------------------------------
+function roadSafePosition(x, z, w, d, rotY = 0) {
+  const hw = Math.abs(w / 2 * Math.cos(rotY)) + Math.abs(d / 2 * Math.sin(rotY));
+  const hd = Math.abs(w / 2 * Math.sin(rotY)) + Math.abs(d / 2 * Math.cos(rotY));
+  for (const road of ALL_ROADS) {
+    const half = road === 0 ? 4.5 : 7;
+    if (Math.abs(x - road) < hw + half + 0.8) {
+      const side = x - road === 0 ? 1 : Math.sign(x - road);
+      x = road + side * (hw + half + 0.8);
+    }
+    if (Math.abs(z - road) < hd + half + 0.8) {
+      const side = z - road === 0 ? 1 : Math.sign(z - road);
+      z = road + side * (hd + half + 0.8);
+    }
+  }
+  return [x, z];
+}
+
 export function buildHouse(parent, x, z, w, d, h, opts = {}) {
+  if (!opts.noRoadClamp) [x, z] = roadSafePosition(x, z, w, d, opts.rotY || 0);
   const m = M();
   const g = new THREE.Group();
   g.position.set(x, 0, z);
@@ -910,12 +930,14 @@ export function buildWorld(scene, assets = null) {
 
   // --- pavilion on the plaza east edge (two-tier) ---
   const PV = BUILD_CFG.pavilion;
-  const pav = buildHouse(world, PV.x, PV.z, PV.w, PV.d, PV.h,
-    { roofMat: m.roofBlue, roofH: PV.roofH, name: 'pavilion', rotY: angle(PV.rotY) });
-  const tier = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(PV.tier.w, PV.tier.h, PV.tier.d)), m.plaster);
-  tier.position.set(PV.x, PV.h + PV.tier.h / 2, PV.z); tier.castShadow = true; world.add(tier);
-  const tierRoof = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(PV.tierRoof.r, PV.tierRoof.h, PV.tierRoof.segments)), m.roofBlue);
-  tierRoof.position.set(PV.x, PV.h + PV.tierRoof.h + PV.tier.h / 2, PV.z); tierRoof.rotation.y = Math.PI/4; tierRoof.castShadow = true; world.add(tierRoof);
+  if (PV.enabled !== false) {
+    buildHouse(world, PV.x, PV.z, PV.w, PV.d, PV.h,
+      { roofMat: m.roofBlue, roofH: PV.roofH, name: 'pavilion', rotY: angle(PV.rotY) });
+    const tier = new THREE.Mesh(trackGeo(new THREE.BoxGeometry(PV.tier.w, PV.tier.h, PV.tier.d)), m.plaster);
+    tier.position.set(PV.x, PV.h + PV.tier.h / 2, PV.z); tier.castShadow = true; world.add(tier);
+    const tierRoof = new THREE.Mesh(trackGeo(new THREE.ConeGeometry(PV.tierRoof.r, PV.tierRoof.h, PV.tierRoof.segments)), m.roofBlue);
+    tierRoof.position.set(PV.x, PV.h + PV.tierRoof.h + PV.tier.h / 2, PV.z); tierRoof.rotation.y = Math.PI/4; tierRoof.castShadow = true; world.add(tierRoof);
+  }
 
   // --- boundary city walls, with gates where the main lanes meet them ---
   const H = TOWN.half;
@@ -952,8 +974,8 @@ export function buildWorld(scene, assets = null) {
   const TS = SCENERY_CFG.treeScale;
   const blockedTree = (x, z) =>
     Math.hypot(x - EX.pond.x, z - EX.pond.z) < EX.pond.r ||
-    CITY_ROADS.some(road => Math.abs(x - road) < EX.roadHalf) ||
-    CITY_ROADS.some(road => Math.abs(z - road) < EX.roadHalf) ||
+    ALL_ROADS.some(road => Math.abs(x - road) < EX.roadHalf) ||
+    ALL_ROADS.some(road => Math.abs(z - road) < EX.roadHalf) ||
     (Math.abs(Math.abs(x) - EX.shopRow.center) < EX.shopRow.band && Math.abs(z) > EX.shopRow.minZ) ||
     Math.hypot(x - EX.pavilion.x, z - EX.pavilion.z) < EX.pavilion.r ||
     Math.hypot(x - EX.garden.x, z - EX.garden.z) < EX.garden.r ||
@@ -996,8 +1018,8 @@ export function buildWorld(scene, assets = null) {
       if (!spec) return;
       const [base, step, cycle] = spec;
       list.forEach(([bx, bz], i) => {
-        if (CITY_ROADS.some(road => Math.abs(bx - road) < EX.roadHalf) ||
-            CITY_ROADS.some(road => Math.abs(bz - road) < EX.roadHalf)) return;
+        if (ALL_ROADS.some(road => Math.abs(bx - road) < EX.roadHalf) ||
+            ALL_ROADS.some(road => Math.abs(bz - road) < EX.roadHalf)) return;
         if (inPlot(bx, bz, 2)) return;
         buildBush(world, bx, bz, base + (i % cycle) * step);
       });
@@ -1051,9 +1073,10 @@ function placeAssets(parent, assets) {
     if (!assets[h.asset]) continue;
     const s = sz(h.asset);
     const rotY = angle(h.rotY);
-    const inst = instantiate(assets[h.asset], { x: h.x, z: h.z, rotY });
+    const [x, z] = roadSafePosition(h.x, h.z, s.x, s.z, rotY);
+    const inst = instantiate(assets[h.asset], { x, z, rotY });
     parent.add(inst);
-    addPropCollider(h.x, h.z, Math.max(s.x, 3.2), Math.max(s.z, 3.2), s.y, 'house');
+    addPropCollider(x, z, Math.max(s.x, 3.2), Math.max(s.z, 3.2), s.y, 'house');
   }
 
   const SH = BUILD_CFG.shopShell;
@@ -1070,8 +1093,10 @@ function placeAssets(parent, assets) {
   for (const f of BUILD_CFG.farms) {
     if (!assets[f.asset]) continue;
     const s = sz(f.asset);
-    parent.add(instantiate(assets[f.asset], { x: f.x, z: f.z, rotY: angle(f.rotY) }));
-    addPropCollider(f.x, f.z, Math.max(s.x, 2.5), Math.max(s.z, 2.5), f.colliderTop, f.kind);
+    const rotY = angle(f.rotY);
+    const [x, z] = roadSafePosition(f.x, f.z, s.x, s.z, rotY);
+    parent.add(instantiate(assets[f.asset], { x, z, rotY }));
+    addPropCollider(x, z, Math.max(s.x, 2.5), Math.max(s.z, 2.5), f.colliderTop, f.kind);
   }
 
   // 4) (FBX nature pack relies on external textures that FBX doesn't embed —

@@ -17,6 +17,7 @@ import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
 import { CITY_ZONES } from './districts.js';
+import { buildTraffic, updateTraffic, trafficStats } from './traffic.js';
 import {
   initBuilder, enterBuilder, exitBuilder, isBuilderEnabled,
   setTool, selectDef, setGizmoMode, refreshPropsPanel, clearAll,
@@ -125,6 +126,7 @@ async function init() {
   } catch (e) { console.warn('asset preload failed, falling back to procedural', e); }
 
   world = buildWorld(scene, assets);   // geometry (+ placed FBX buildings/props)
+  buildTraffic(scene);                  // modern roads, signals and live vehicles
   spawnNPCs(scene, assets);            // animated villagers + animals
   window.__townAssets = assets;        // builder reads FBX templates from here
   applyTime(currentTime);
@@ -132,6 +134,7 @@ async function init() {
   document.querySelectorAll('[data-time]').forEach(b => b.classList.toggle('active', b.dataset.time === currentTime));
 
   initOrbit();
+  frameTopDown();
   bindUI();
   initBuilder({
     scene, camera, renderer, orbit,
@@ -177,7 +180,7 @@ function initRenderer() {
 }
 
 function initCamera() {
-  camera = new THREE.PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 600);
+  camera = new THREE.PerspectiveCamera(settings.fov, window.innerWidth / window.innerHeight, 0.1, 1500);
   camera.position.set(0, 48, 52);
   camera.lookAt(0, 0, 0);
 }
@@ -187,7 +190,7 @@ function initOrbit() {
   orbit.enableDamping = true;
   orbit.dampingFactor = 0.08;
   orbit.minDistance = 20;
-  orbit.maxDistance = 450;
+  orbit.maxDistance = 1200;
   orbit.maxPolarAngle = Math.PI / 2.12;
   orbit.minPolarAngle = 0.12;
   orbit.target.set(0, 0, 0);
@@ -278,6 +281,16 @@ function bindUI() {
   }
   qbtns.forEach(b => b.addEventListener('click', () => applyQuality(b.dataset.quality)));
   applyQuality(settings.quality);
+
+  const showFps = document.getElementById('showFps');
+  const fpsReadout = document.getElementById('fpsReadout');
+  showFps.checked = settings.showFps !== false;
+  fpsReadout.hidden = !showFps.checked;
+  showFps.addEventListener('change', () => {
+    settings.showFps = showFps.checked;
+    fpsReadout.hidden = !showFps.checked;
+    saveSettings();
+  });
 
   const inv = document.getElementById('invertY');
   inv.checked = settings.invertY;
@@ -417,7 +430,7 @@ function frameTopDown() {
   const sphere = box.getBoundingSphere(new THREE.Sphere());
   const radius = Math.max(sphere.radius, 25);
   const fov = THREE.MathUtils.degToRad(camera.fov);
-  const dist = Math.min((radius * 1.25) / Math.sin(fov / 2), 380);
+  const dist = Math.min((radius * 1.05) / Math.sin(fov / 2), 950);
   const center = sphere.center;
   orbit.target.copy(center);
   const dir = new THREE.Vector3(0, 0.82, 0.6).normalize();
@@ -699,6 +712,7 @@ function animate() {
 
   updatePlayer(dt);
   updateNPCs(dt, getNightAmount());
+  updateTraffic(dt, npcs, getNightAmount());
   updateWind(clock.elapsedTime);
   updateWaterfall(dt);
   updateBoats(clock.elapsedTime);
@@ -740,7 +754,7 @@ window.__disposeTown = function () {
 };
 
 // debug hook for automated verification
-window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); Object.defineProperty(window,'__post',{get:()=>post}); window.__wind = windUniforms; window.__gait = applyGait; window.__setPost = (v)=>{ post = v; }; window.__town = { player, ladders, colliders, npcs, setView, applyTime, toggleBuilder, isBuilderEnabled, builderDebug, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
+window.__THREE = THREE; Object.defineProperty(window,'__renderer',{get:()=>renderer}); Object.defineProperty(window,'__post',{get:()=>post}); window.__wind = windUniforms; window.__traffic = trafficStats; window.__gait = applyGait; window.__setPost = (v)=>{ post = v; }; window.__town = { player, ladders, colliders, npcs, setView, applyTime, toggleBuilder, isBuilderEnabled, builderDebug, get view(){ return view; }, get camera(){ return camera; }, get scene(){ return scene; }, get world(){ return world; } };
 
 // ===========================================================================
 init().catch((e) => {
