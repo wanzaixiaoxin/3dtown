@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { M, trackGeo } from './materials.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { colliders, inPlot } from './world.js';
-import { ALL_ROADS } from './districts.js';
+import { ALL_ROADS, CITY_ZONES } from './districts.js';
 
 // --- shared wind uniforms (driven by main.js each frame) ---
 export const windUniforms = {
@@ -340,6 +340,12 @@ export function buildGrassField(parent) {
   const d = new THREE.Object3D();
   const color = new THREE.Color();
   const TOWN = 260;
+  // 分区地块矩形表（世界坐标），草地不种进人造地坪，避免卡片穿模闪烁
+  const pads = CITY_ZONES.map(zn => ({
+    minX: zn.x - zn.w / 2 - 1, maxX: zn.x + zn.w / 2 + 1,
+    minZ: zn.z - zn.d / 2 - 1, maxZ: zn.z + zn.d / 2 + 1,
+  }));
+  const inPad = (x, z) => pads.some(p => x > p.minX && x < p.maxX && z > p.minZ && z < p.maxZ);
   let i = 0, guard = 0;
   while (i < COUNT && guard < COUNT * 6) {
     guard++;
@@ -349,6 +355,7 @@ export function buildGrassField(parent) {
     if (Math.hypot(x, z) < 11.5) continue;
     if (Math.hypot(x + 16, z - 16) < 8) continue;
     if (inPlot(x, z, 1)) continue;
+    if (inPad(x, z)) continue;
     d.position.set(x, 0.02, z);
     d.rotation.set(0, Math.random() * Math.PI * 2, 0);
     const sc = 0.65 + Math.random() * 0.75;

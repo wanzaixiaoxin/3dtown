@@ -87,6 +87,10 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
   const mat = value => {
     if (!materialCache.has(value)) {
       const material = new THREE.MeshStandardMaterial({ color: value, roughness: 0.9 });
+      // 地坪与其他贴地几何共面区域较多，轻微深度偏移防 z-fighting
+      material.polygonOffset = true;
+      material.polygonOffsetFactor = -1;
+      material.polygonOffsetUnits = -1;
       materialCache.set(value, material);
       disposables.materials.push(material);
     }
@@ -98,7 +102,7 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
     return mesh;
   };
   const box = (group, w, h, d, material, x, y, z) => add(group, new THREE.BoxGeometry(w, h, d), material, x, y, z);
-  const groundBox = (group, w, d, material, x, z) => box(group, w, 0.06, d, material, x, 0.03, z);
+  const groundBox = (group, w, d, material, x, z) => box(group, w, 0.1, d, material, x, 0.05, z);
   const ground = (group, zone, color) => groundBox(group, zone.w, zone.d, mat(color), 0, 0);
   const shiftCollider = (c, dx, dz) => {
     c.minX += dx; c.maxX += dx; c.minZ += dz; c.maxZ += dz;
@@ -122,35 +126,37 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
 
   // 放置一个 FBX 模型实例（CC0 建筑资产），按footprint对齐、落地面 y=0，注册碰撞体。
   // 模型缺失时回退到程序化 buildHouse，保证任何资产子集下街区都能完整成形。
-  // 每个实例按 (key,x,z) 哈希取一套墙/顶色调，避免同款模型复制粘贴感。
-  const TINTS = [
-    { wall: 0xffffff, roof: null },       // 原色
-    { wall: 0xe8d0b8, roof: 0x8a5a42 },   // 暖米墙 + 红褐顶
-    { wall: 0xd4e0d8, roof: 0x4a5e6a },   // 青白墙 + 蓝灰顶
-    { wall: 0xe8d8d0, roof: 0x7a4a3a },   // 粉白墙 + 砖红顶
-    { wall: 0xd8dde4, roof: 0x3e4a56 },   // 灰蓝墙 + 深蓝顶
-    { wall: 0xf0e2c0, roof: 0x6a5a3a },   // 奶黄墙 + 土黄顶
-  ];
+  // 每个实例按 (key,x,z) 哈希做轻度和色偏移（保持 paintUntexturedBuildings 的主色，
+  // 只做明度/色相微调），避免同款模型复制粘贴感又不破坏配色体系。
   function tintHash(str) {
     let h = 0;
     for (const ch of str) h = (h * 31 + ch.charCodeAt(0)) | 0;
     return Math.abs(h);
   }
   function applyTint(inst, key, x, z, seed) {
-    const t = TINTS[tintHash(key + ':' + x + ':' + z + ':' + seed) % TINTS.length];
-    if (t.wall === 0xffffff) return;
+    // 微调量：亮度 ±8%，色相 ±4°，2 档屋顶加亮
+    const h = tintHash(key + ':' + x + ':' + z + ':' + seed);
+    const mul = 0.92 + (h % 5) * 0.04;               // 0.92–1.08
+    const hueShift = ((h >> 3) % 9 - 4) / 60;        // ±0.067 hue
+    const lift = (h >> 6) % 3 === 0;                 // 1/3 概率墙体加亮一档
+    const _c = new THREE.Color();
     inst.traverse(o => {
       if (!o.isMesh) return;
       const mats = Array.isArray(o.material) ? o.material : [o.material];
-      const normal = o.geometry?.attributes.normal;
-      // 单 mesh 判断：多数法线朝上 = 屋顶部分，用顶色；否则用墙色
-      let up = 0, total = 0;
-      if (normal) for (let i = 0; i < normal.count; i += 3) { total++; if (normal.getY(i) > 0.7) up++; }
-      const isRoof = total > 0 && up / total > 0.6;
       for (const mm of mats) {
-        if (mm.map) continue; // 有贴图的模型不动色
-        const target = isRoof ? (t.roof ?? mm.color) : t.wall;
-        if (target && mm.color) mm.color.set(target);
+        if (mm.map) continue;
+        if (!mm.color) continue;
+        const hex = mm.color.getHexString();
+        if (hex === 'ffffff') continue;              // 他人负责的白模不碰
+        _c.copy(mm.color);
+        const hsl = {};
+        _c.getHSL(hsl);
+        _c.setHSL(
+          (hsl.h + hueShift + 1) % 1,
+          Math.min(1, hsl.s * 1.05),
+          Math.min(0.85, Math.max(0.12, hsl.l * mul + (lift ? 0.05 : 0))),
+        );
+        mm.color.copy(_c);
       }
     });
   }
@@ -200,32 +206,239 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
     collider(S, 0, T, S * 2, H, 'wall');
   }
 
+  // ---- 现代建筑工艺 ---------------------------------------------------------
+  // 共享材质（有质感）：玻璃幕墙（半镜面）、竖向翼板、金属收边
+  let _glassMat = null, _finsMat = null, _mullionMat = null;
+  const glassMat = () => {
+    if (!_glassMat) {
+      _glassMat = new THREE.MeshStandardMaterial({
+        color: 0x2e4a5c, roughness: 0.18, metalness: 0.55, envMapIntensity: 1.4,
+      });
+      disposables.materials.push(_glassMat);
+    }
+    return _glassMat;
+  };
+  const finsMat = () => {
+    if (!_finsMat) {
+      _finsMat = new THREE.MeshStandardMaterial({ color: 0xb8bec4, roughness: 0.5, metalness: 0.35 });
+      disposables.materials.push(_finsMat);
+    }
+    return _finsMat;
+  };
+  const mullionMat = () => {
+    if (!_mullionMat) {
+      _mullionMat = new THREE.MeshStandardMaterial({ color: 0x3a4248, roughness: 0.6, metalness: 0.3 });
+      disposables.materials.push(_mullionMat);
+    }
+    return _mullionMat;
+  };
+
+  // 摩天楼：分段退台体量 + 玻璃幕墙 + 竖向翼板 + 顶部设备层 + 屋顶航空灯
+  // 参照陆家嘴/珠江新城玻璃塔楼；翼板/楼层线全部走实例化合批，避免上千 draw call
+  function skyscraper(group, x, z, w, d, height, opts = {}) {
+    const glass = opts.glass || glassMat();
+    const body = opts.body || mat(opts.bodyColor ?? 0x9aa5ad);
+    const fins = finsMat();
+    const mull = mullionMat();
+    const segs = opts.segments || 3;                     // 退台段数
+    const segH = height / segs;
+    const finTransforms = [];                            // 待实例化翼板
+    const mullTransforms = [];                           // 待实例化楼层线
+    let cw = w, cd = d;
+    for (let s = 0; s < segs; s++) {
+      const bh = segH * (s === segs - 1 ? 0.82 : 1);     // 顶段留设备层
+      const y = segH * s;
+      // 幕墙主体
+      box(group, cw, bh, cd, glass, x, y + bh / 2, z);
+      // 每段顶部压顶石
+      box(group, cw + 0.5, 0.45, cd + 0.5, body, x, y + bh + 0.22, z);
+      // 竖向翼板（四立面）：把玻璃面切成有节奏的竖条
+      const nFins = Math.max(3, Math.round(cw / 4.5));
+      for (let fi = 0; fi < nFins; fi++) {
+        const fx = x - cw / 2 + (fi + 0.5) * (cw / nFins);
+        finTransforms.push([fx, y + bh / 2, z - cd / 2 - 0.18, 1, bh - 0.4]);
+        finTransforms.push([fx, y + bh / 2, z + cd / 2 + 0.18, 1, bh - 0.4]);
+      }
+      const nFinsZ = Math.max(3, Math.round(cd / 4.5));
+      for (let fi = 0; fi < nFinsZ; fi++) {
+        const fz = z - cd / 2 + (fi + 0.5) * (cd / nFinsZ);
+        finTransforms.push([x - cw / 2 - 0.18, y + bh / 2, fz, 0, bh - 0.4]);
+        finTransforms.push([x + cw / 2 + 0.18, y + bh / 2, fz, 0, bh - 0.4]);
+      }
+      // 横向楼层线（收边）
+      for (let fy = 1.6; fy < bh - 0.6; fy += 5.5) {
+        mullTransforms.push([x, y + fy, z, cw + 0.12, cd + 0.12]);
+      }
+      // 退台
+      cw *= 0.86; cd *= 0.86;
+    }
+    // 翼板实例网格：dims [x,z,orientation,height]
+    if (finTransforms.length) {
+      const inst = new THREE.InstancedMesh(trackGeo(new THREE.BoxGeometry(0.22, 1, 0.32)), fins, finTransforms.length);
+      finTransforms.forEach(([fx, fy, fz, o, fh], i) => {
+        dummy.position.set(fx, fy, fz);
+        dummy.rotation.set(0, o ? Math.PI / 2 : 0, 0);
+        dummy.scale.set(1, fh, 1);
+        dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      inst.castShadow = false; inst.receiveShadow = true; inst.userData.noBatch = true;
+      group.add(inst);
+    }
+    if (mullTransforms.length) {
+      const inst = new THREE.InstancedMesh(trackGeo(new THREE.BoxGeometry(1, 0.1, 1)), mull, mullTransforms.length);
+      mullTransforms.forEach(([mx, my, mz, mw, md], i) => {
+        dummy.position.set(mx, my, mz);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(mw, 1, md);
+        dummy.updateMatrix(); inst.setMatrixAt(i, dummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      inst.castShadow = false; inst.receiveShadow = true; inst.userData.noBatch = true;
+      group.add(inst);
+    }
+    // 顶部设备层 + 航空障碍灯
+    const topY = height;
+    box(group, cw * 0.9, 2.2, cd * 0.9, mat(0x6a7078), x, topY + 1.1, z);
+    box(group, cw * 0.4, 0.6, cd * 0.4, mull, x, topY + 2.6, z);
+    box(group, 0.5, 0.5, 0.5, new THREE.MeshStandardMaterial({
+      color: 0xd8442e, emissive: 0xd8442e, emissiveIntensity: 0.9,
+    }), x, topY + 3.1, z);
+    // 底部玻璃裙楼（两层通高商业）
+    if (!opts.noPodium) {
+      box(group, w + 5, 5.2, d + 5, glass, x, 2.6, z);
+      box(group, w + 5.5, 0.4, d + 5.5, body, x, 5.4, z);
+      // 裙楼入口雨棚
+      box(group, 7, 0.3, 3, body, x, 5.9, z - (d + 5) / 2 - 1.2);
+      for (const px of [-3, 3]) box(group, 0.25, 3.2, 0.25, mull, x + px, 3.2, z - (d + 5) / 2 - 1.2);
+      collider(x, z, w + 6, d + 6, height + 3, 'house');
+    } else {
+      collider(x, z, w, d, height + 3, 'house');
+    }
+  }
+
+  // 现代高层住宅塔（恒大/碧桂园式）：米色/暖色塔身 + 白色阳台横带 + 裙楼车库
+  // 阳台板/窗带每塔 4 条 × 楼层，全部合批为每塔 2 个 InstancedMesh
+  function residentialTower(group, x, z, w, d, height, opts = {}) {
+    const wall = mat(opts.wall ?? 0xd8c9b0);
+    const accent = mat(opts.accent ?? 0x8a6a50);         // 底部基座暖棕
+    const band = mat(0xf2ede2);                          // 阳台横带米白
+    const glass = glassMat();
+    const bodyH = height - 1.2;
+    // 塔身
+    box(group, w, bodyH, d, wall, x, bodyH / 2, z);
+    // 阳台横带 + 窗带（实例化）
+    const floors = Math.max(3, Math.round(bodyH / 3));
+    const bandT = [], winT = [];
+    for (let f = 0; f < floors; f++) {
+      const fy = 2.2 + f * (bodyH / floors);
+      bandT.push([x, fy, z, w + 0.7, d + 0.7]);          // 阳台板
+      bandT.push([x, fy + 0.5, z, w + 0.4, d + 0.4]);    // 栏板
+      winT.push([x, fy + 1.2, z - d / 2 - 0.05, w * 0.92, 0, 1.1]);
+      winT.push([x, fy + 1.2, z + d / 2 + 0.05, w * 0.92, 0, 1.1]);
+      winT.push([x - w / 2 - 0.05, fy + 1.2, z, d * 0.92, 1, 1.1]);
+      winT.push([x + w / 2 + 0.05, fy + 1.2, z, d * 0.92, 1, 1.1]);
+    }
+    const bandInst = new THREE.InstancedMesh(trackGeo(new THREE.BoxGeometry(1, 0.55, 1)), band, bandT.length);
+    bandT.forEach(([bx, by, bz, bw, bd], i) => {
+      dummy.position.set(bx, by, bz); dummy.rotation.set(0, 0, 0); dummy.scale.set(bw, 1, bd);
+      dummy.updateMatrix(); bandInst.setMatrixAt(i, dummy.matrix);
+    });
+    bandInst.instanceMatrix.needsUpdate = true; bandInst.castShadow = false; bandInst.receiveShadow = true;
+    bandInst.userData.noBatch = true;
+    group.add(bandInst);
+    const winInst = new THREE.InstancedMesh(trackGeo(new THREE.BoxGeometry(1, 1, 1)), glass, winT.length);
+    winT.forEach(([wx, wy, wz, wl, o, wh], i) => {
+      dummy.position.set(wx, wy, wz);
+      dummy.rotation.set(0, o ? Math.PI / 2 : 0, 0);
+      dummy.scale.set(o ? 0.1 : wl, wh, o ? wl : 0.1);
+      dummy.updateMatrix(); winInst.setMatrixAt(i, dummy.matrix);
+    });
+    winInst.instanceMatrix.needsUpdate = true; winInst.castShadow = false; winInst.receiveShadow = true;
+    winInst.userData.noBatch = true;
+    group.add(winInst);
+    // 顶部收边 + 设备
+    box(group, w + 0.5, 0.5, d + 0.5, accent, x, bodyH + 0.25, z);
+    box(group, w * 0.3, 1.2, d * 0.3, accent, x, bodyH + 1.0, z);
+    // 底部基座（两层商业/门厅）+ 单元入口
+    box(group, w + 2.5, 4.2, d + 2.5, accent, x, 2.1, z);
+    box(group, w + 3, 0.35, d + 3, band, x, 4.4, z);
+    box(group, 5, 3.4, 0.4, glass, x, 1.8, z - (d + 2.5) / 2 - 0.1);
+    box(group, 6, 0.35, 2.2, band, x, 4.0, z - (d + 2.5) / 2 - 0.8);
+    collider(x, z, w + 3, d + 3, height, 'house');
+  }
+
+  // 大型商业体（山姆/武商/SKP 式）：大体量盒子 + 巨型门头 + 玻璃条窗 + 屋顶停车场
+  function bigBoxMall(group, x, z, w, d, height, opts = {}) {
+    const body = mat(opts.body ?? 0xc9c2b4);             // 大面米灰实体墙
+    const band = mat(opts.band ?? 0x5b4632);             // 深色木质腰线
+    const glass = glassMat();
+    const sign = mat(opts.sign ?? 0x8a2f2a);             // 商标红
+    // 主体
+    box(group, w, height, d, body, x, height / 2, z);
+    // 竖向实墙分隔（把大盒子切成有节奏的开间）
+    const bays = Math.max(4, Math.round(w / 9));
+    for (let i = 1; i < bays; i++) {
+      const bx = x - w / 2 + i * (w / bays);
+      box(group, 0.5, height, 0.5, band, bx, height / 2, z - d / 2 - 0.2);
+    }
+    // 高侧窗带（上部通长玻璃带，仓储超市特征）
+    box(group, w * 0.96, 1.6, 0.12, glass, x, height * 0.72, z - d / 2 - 0.06);
+    box(group, w * 0.96, 1.6, 0.12, glass, x, height * 0.72, z + d / 2 + 0.06);
+    box(group, 0.12, 1.6, d * 0.9, glass, x - w / 2 - 0.06, height * 0.72, z);
+    box(group, 0.12, 1.6, d * 0.9, glass, x + w / 2 + 0.06, height * 0.72, z);
+    // 腰线
+    box(group, w + 0.6, 0.8, d + 0.6, band, x, height * 0.55, z);
+    box(group, w + 0.6, 0.35, d + 0.6, band, x, height + 0.15, z);
+    // 巨型门头：两层高通高玻璃入口 + 大雨棚 + 商标色块
+    box(group, 14, 6.5, 0.5, glass, x, 3.25, z - d / 2 - 0.3);
+    box(group, 16, 0.5, 4.5, sign, x, 7.0, z - d / 2 - 1.8);      // 红色大挑檐（logo 带位）
+    box(group, 12, 1.6, 0.3, sign, x, 8.6, z - d / 2 - 0.4);      // 门头招牌色块
+    for (const px of [-7.5, 0, 7.5]) box(group, 0.4, 7, 0.4, band, x + px, 3.5, z - d / 2 - 0.55);
+    // 次入口
+    box(group, 6, 3.2, 0.4, glass, x - w / 2 - 0.3, 1.7, z - d * 0.25);
+    // 屋顶设备（空调机组排布）
+    for (let i = 0; i < 4; i++) {
+      box(group, 2.2, 1.0, 1.6, mat(0x9aa0a6), x - w * 0.28 + i * (w * 0.18), height + 0.9, z + d * 0.2);
+    }
+    collider(x, z, w + 2, d + 6, height + 1.5, 'house');
+  }
+
   // ---- 内环街坊蓝图 -------------------------------------------------------
 
-  // CBD：6 座高层塔楼（真实 FBX 资产）+ 中央广场（低密度高强度，真实商务区形态）
+  // CBD：摩天楼群（4 主塔 + 2 副塔退台）+ 中央广场 —— 都市天际线
   function cbdBlock(group, zone) {
     ground(group, zone, 0x8b9298);
     groundBox(group, 30, 30, mat(0xa3a9ad), 0, 0);
-    const towers = [
-      ['tower2', -26, -26, 11], ['tower1', 2, -26, 11], ['tower3', 28, -26, 11],
-      ['tower1', -26, 24, 11], ['tower2', 2, 24, 11], ['tower3', 28, 26, 10],
-    ];
-    towers.forEach(([key, x, z, fp], i) => {
-      assetHouse(group, key, x, z, [0, Math.PI / 2, Math.PI][i % 3], fp, fp, key === 'tower1' ? 22 : key === 'tower2' ? 18 : 15);
-    });
-    for (const [x, z] of [[-36, 0], [36, 0], [0, -36], [0, 36]]) buildTree(group, x, z, 0.9);
+    skyscraper(group, -24, -24, 16, 16, 46, { bodyColor: 0x8fa3b0 });
+    skyscraper(group, 6, -26, 14, 14, 58, { bodyColor: 0x7f98a8, segments: 4 });
+    skyscraper(group, 30, -22, 12, 12, 38, { bodyColor: 0xa8b4ba });
+    skyscraper(group, -28, 22, 13, 13, 42, { bodyColor: 0x93a8b4, segments: 4 });
+    skyscraper(group, 4, 26, 17, 15, 64, { bodyColor: 0x6f8a9c, segments: 4 });
+    skyscraper(group, 30, 24, 11, 11, 34, { bodyColor: 0x9db0b8 });
+    for (const [x, z] of [[-36, 0], [36, 0], [0, -36], [0, 36], [-36, -8], [36, 8]]) buildTree(group, x, z, 0.9);
+    for (const [x, z] of [[-12, -6], [12, 6], [-14, 12], [14, -12]]) {
+      groundBox(group, 7, 7, mat(0x74884f), x, z);
+      buildTree(group, x, z, 1.1);
+    }
   }
 
-  // 居民楼：两排公寓板楼（真实 FBX 资产 Flat/Flat2）+ 内部绿地
+  // 居民楼小区：4 栋高层住宅塔 + 中轴景观带（现代商品房小区形态）
   function apartmentBlock(group, zone) {
     ground(group, zone, 0x7c8175);
-    groundBox(group, zone.w - 16, 12, mat(0x6f8b57), 0, 0);
-    const rows = [
-      ['flat', -18, -24], ['flat2', 18, -24], ['flat', -18, 24], ['flat2', 18, 24],
-      ['flat2', -18, 0], ['flat', 18, 0],
-    ];
-    for (const [key, x, z] of rows) assetHouse(group, key, x, z, 0, 13, 10, key === 'flat' ? 16 : 13);
-    for (const [x, z] of [[-32, -12], [32, -12], [-32, 12], [32, 12], [0, -32], [0, 32]]) buildTree(group, x, z, 0.9);
+    groundBox(group, zone.w - 14, 14, mat(0x6f8b57), 0, 0);
+    residentialTower(group, -22, -22, 13, 11, 42, { wall: 0xd8c9b0, accent: 0x9a7350 });
+    residentialTower(group, 22, -22, 12, 12, 36, { wall: 0xcfc4ae, accent: 0x8a6a50 });
+    residentialTower(group, -22, 22, 12, 12, 48, { wall: 0xe0d2b8, accent: 0x9a7350 });
+    residentialTower(group, 22, 22, 13, 11, 40, { wall: 0xd2c8b4, accent: 0x8a6a50 });
+    // 中轴景观：水景 + 树阵 + 步道
+    add(group, new THREE.CylinderGeometry(6, 6.4, 0.4, 24), m.stoneLt, 0, 0.2, 0);
+    add(group, new THREE.CylinderGeometry(5.2, 5.2, 0.14, 24), m.water, 0, 0.42, 0);
+    for (const z of [-10, -4, 4, 10]) {
+      buildTree(group, -6, z, 0.85);
+      buildTree(group, 6, z, 0.85);
+      box(group, 2.2, 0.12, 0.55, m.wood, 0, 0.55, z);
+    }
   }
 
   // 社区住宅：围合式院落 2×2 组团 共 16 栋真实民居（House1-5 轮换）
@@ -472,6 +685,24 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
     }
   }
 
+  // 大型商业体街坊：山姆式大盒超市 + 停车场（占满 78×78 街坊）
+  function mallBlock(group, zone) {
+    ground(group, zone, 0x9a9d9a);
+    groundBox(group, 22, 20, mat(0x8f9390), -24, 24);   // 入口前广场
+    bigBoxMall(group, -16, -8, 52, 34, 13);
+    // 停车场带（沿街坊南缘）
+    groundBox(group, zone.w - 10, 18, m.asphalt, 0, 28);
+    const carColors = [0x55768a, 0x8a5560, 0x6a8a55, 0x9a9a9a];
+    for (let i = 0; i < 14; i++) {
+      box(group, 2.0, 0.8, 4.2, mat(carColors[i % carColors.length]), -30 + i * 4.6, 0.42, 26);
+      if (i % 3 !== 2) box(group, 2.0, 0.8, 4.2, mat(carColors[(i + 2) % carColors.length]), -30 + i * 4.6, 0.42, 31);
+    }
+    for (const x of [-34, -12, 10, 32]) box(group, 0.14, 5, 0.14, m.stoneDk, x, 2.5, 22);
+    // 购物车归集区 + 绿化带
+    for (const x of [-36, -32]) box(group, 1.8, 1.0, 1.4, mat(0xb0b6ba), x, 0.5, 16);
+    for (const [tx, tz] of [[36, -28], [36, -12], [36, 4]]) buildTree(group, tx, tz, 0.9);
+  }
+
   // 通用居住街坊（infill）：FBX 真实民居的行列式布局（性能：共享几何，静态合批）
   function denseModule(group, zone) {
     const grid = zone.w >= 70 ? 8 : 4;
@@ -521,6 +752,10 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
     else if (zone.key === 'logistics') logisticsBlock(group, zone);
     else if (zone.key === 'station') stationBlock(group, zone);
     else if (zone.key === 'parking') parkingBlock(group, zone);
+    else if (zone.key === 'infill' && zone.label === '综合市场' && !zone.mallDone) {
+      zone.mallDone = true;
+      mallBlock(group, zone);   // 大型商业体（山姆式大盒超市），只建一处
+    }
     else denseModule(group, zone); // infill 通用街坊
     sign(group, zone.label, -zone.w / 2 + 3, -zone.d / 2 + 1.2, zone.color);
     const worldX = group.position.x, worldZ = group.position.z;
@@ -535,7 +770,7 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
   disposables.materials.push(proxyMaterial);
   districtProxy = new THREE.InstancedMesh(trackGeo(new THREE.BoxGeometry(1, 1, 1)), proxyMaterial, CITY_ZONES.length);
   const PROXY_HEIGHTS = {
-    office: 26, apartment: 17, school: 11, community: 8, workshop: 6, police: 9, fire: 9,
+    office: 58, apartment: 44, school: 11, community: 8, workshop: 6, police: 9, fire: 9,
     stadium: 4, prison: 6, factory: 7, station: 10, logistics: 6, villas: 5,
   };
   CITY_ZONES.forEach((zone, i) => {

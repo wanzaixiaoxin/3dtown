@@ -13,17 +13,19 @@ const cache = new Map();     // url -> THREE.Group (original)
 export const mixers = [];    // AnimationMixer list updated each frame
 
 // Quaternius 的部分建筑包（2017 Buildings / Civilization）只有单个白色材质，
-// 贴图不内嵌（FBX 不带 atlas）。按模型哈希给整栋建筑一套明快色板，
-// 屋顶部分（法线朝上的独立 mesh）用深色，其余为墙体亮色。
+// 贴图不内嵌（FBX 不带 atlas）。按模型哈希给整栋建筑一套明快色板：
+// 墙体用有辨识度的中间色（陶土红/暖黄/灰蓝/青绿…），屋顶统一深色，
+// 避免大面积白墙的「素坯」感。
 function paintUntexturedBuildings(root) {
-  // 明快的墙体色板（低饱和暖色系，与程序化街区协调）
   const palettes = [
-    { wall: 0xe8e0d0, roof: 0x555c66 },   // 米白 + 青灰顶
-    { wall: 0xe3d5bd, roof: 0x6b4a3a },   // 暖米 + 砖红顶
-    { wall: 0xd8dcd0, roof: 0x46525c },   // 灰白 + 深蓝顶
-    { wall: 0xe6d8c8, roof: 0x5d6a55 },   // 奶白 + 墨绿顶
-    { wall: 0xdcd2c0, roof: 0x66605a },   // 浅灰米 + 深棕顶
-    { wall: 0xe0d6c6, roof: 0x74584a },   // 米黄 + 赭石顶
+    { wall: 0xc96f4a, roof: 0x3d4650 },   // 陶土红墙
+    { wall: 0xd9a441, roof: 0x4a4438 },   // 暖黄墙
+    { wall: 0x8a9ba8, roof: 0x2f3844 },   // 灰蓝墙
+    { wall: 0x9caf88, roof: 0x39423a },   // 青绿墙
+    { wall: 0xb98a6e, roof: 0x453c33 },   // 红棕墙
+    { wall: 0xcfc3a8, roof: 0x50483a },   // 沙色墙
+    { wall: 0x7f8ea0, roof: 0x333d4c },   // 靛蓝墙
+    { wall: 0xc4b8d4, roof: 0x43394f },   // 紫灰墙
   ];
   root.traverse((o) => {
     if (!o.isMesh) return;
