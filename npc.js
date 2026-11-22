@@ -399,6 +399,7 @@ function spawnFlowUnit(n, assets) {
   n.speed = randRange(FLOW_CFG.walkSpeed, 1.0);
   n.yaw = Math.atan2(gate.x - sp.x, gate.z - sp.z);  // 面朝城内
   n.group.rotation.y = n.yaw;
+  n.aiVisible = true;
   n.group.visible = true;
   n.flowState = 'active';
   if (FLOW_CFG.randomColors) applyCharacterColors(n.group, randomCharacterColors());
@@ -408,6 +409,7 @@ function spawnFlowUnit(n, assets) {
 // 到达消失点：隐藏并归还池，等待下次 spawn
 function retireFlowUnit(n) {
   n.flowState = 'dormant';
+  n.aiVisible = false;
   n.group.visible = false;
   n.targetExit = false;
   const idx = npcs.indexOf(n);
@@ -1114,7 +1116,7 @@ function updateKeeper(n, dt) {
   n.vel.set(0, 0, 0);
   let near = null, nearD = Infinity;
   for (const o of npcs) {
-    if (o === n || (o.role !== 'visitor' && o.role !== 'traveler') || !o.group.visible) continue;
+    if (o === n || (o.role !== 'visitor' && o.role !== 'traveler') || o.aiVisible === false) continue;
     // 跳过坐标异常的行人：一旦把 NaN 坐标喂给 facePoint/侧移，店员朝向和位置会被污染成 NaN
     if (!Number.isFinite(o.pos.x) || !Number.isFinite(o.pos.z)) continue;
     const d = Math.hypot(o.pos.x - n.pos.x, o.pos.z - n.pos.z);
@@ -1351,14 +1353,16 @@ export function updateNPCs(dt, nightAmount = 0) {
           n.pos.set(n.shopVisitInside.x, 0, n.shopVisitInside.z);
           if (n.group) {
             n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
+            n.aiVisible = false;
             n.group.visible = false;   // 走进门之后才隐藏
           }
         }
       } else if (n.shopExitDwell > 0 && n.shopVisitT <= n.shopExitDwell && n.shopVisitDoor) {
         // 出门：先在屋内现身，再平滑走回门口（不在门口凭空冒出）
-        if (n.group && !n.group.visible) {
+        if (n.group && n.aiVisible === false) {
           if (n.shopVisitInside) n.pos.set(n.shopVisitInside.x, 0, n.shopVisitInside.z);
           n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
+          n.aiVisible = true;
           n.group.visible = true;
         }
         n.shopExitDwell -= dt;
@@ -1381,6 +1385,7 @@ export function updateNPCs(dt, nightAmount = 0) {
           n.pos.set(n.shopVisitDoor.x, 0, n.shopVisitDoor.z);
           if (n.group) n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
         }
+        n.aiVisible = true;
         if (n.group) n.group.visible = true;
         n.shopVisitT = 0;
         n.shopDoorDwell = 0;
@@ -1451,6 +1456,7 @@ export function updateNPCs(dt, nightAmount = 0) {
           n.pos.set(n.shopVisitDoor.x, 0, n.shopVisitDoor.z);
           if (n.group) {
             n.group.position.set(n.pos.x, n.group.position.y, n.pos.z);
+            n.aiVisible = true;
             n.group.visible = true;
           }
         }
@@ -1689,6 +1695,18 @@ export function updateNPCs(dt, nightAmount = 0) {
 
   // 本帧到达城外消失点的流动人口统一回收（避免在遍历中改 npcs 数组）
   for (const n of retireList) retireFlowUnit(n);
+}
+
+export function updateNPCVisibility(camera) {
+  const range = camera.position.y > 180 ? 60 : camera.position.y > 5 ? 130 : 90;
+  const rangeSq = range * range;
+  for (const n of npcs) {
+    if (n.aiVisible === undefined) n.aiVisible = n.group.visible;
+    const dx = n.pos.x - camera.position.x;
+    const dy = -camera.position.y;
+    const dz = n.pos.z - camera.position.z;
+    n.group.visible = n.aiVisible !== false && dx * dx + dy * dy + dz * dz < rangeSq;
+  }
 }
 
 export function disposeNPCs() {

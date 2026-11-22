@@ -111,7 +111,7 @@ function buildMarkings(group) {
     const x = a.axis === 'z' ? a.road - lane : a.cross - a.dir * 14;
     const z = a.axis === 'z' ? a.cross - a.dir * 14 : a.road + lane;
     let yaw = a.axis === 'z' ? (a.dir > 0 ? Math.PI : 0) : (a.dir > 0 ? -Math.PI / 2 : Math.PI / 2);
-    yaw += a.turnBias * Math.PI / 4;
+    yaw += a.turnBias * Math.PI / 2;
     dummy.position.set(x, 0.088, z); dummy.rotation.set(0, yaw, 0); dummy.scale.set(0.85, 0.85, 0.85); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
   });
   mesh.instanceMatrix.needsUpdate = true; group.add(mesh);
@@ -152,6 +152,7 @@ function signBoard(group, text, x, z, width = 3.8, color = '#286293') {
 function buildRoadSigns(group) {
   for (const args of [['中央商业街 步行优先',-7,9],['学校区域 减速慢行',38,-38],['工业区 货车通行',-70,-38],['全城限速 40',58,8]]) signBoard(group, ...args);
   for (const v of VEHICLE_ROADS) for (const h of ALL_ROADS) {
+    if (Math.abs(v) > 200 || Math.abs(h) > 200) continue;
     const vi = ALL_ROADS.indexOf(v) + 1, hi = ALL_ROADS.indexOf(h) + 1;
     signBoard(group, `经${vi}路 / 纬${hi}路`, v + 9.2, h - 9.2, 2.4, '#287052');
   }
@@ -175,9 +176,9 @@ function buildStreetLights(group) {
     dummy.position.set(p.x, 4.55, p.z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); bulbMesh.setMatrixAt(i, dummy.matrix);
   });
   bulbMesh.instanceMatrix.needsUpdate = true; group.add(bulbMesh);
-  for (const road of [-200, -100, 100, 200]) for (const cross of [-200, 0, 200]) {
+  for (const road of [-100, 100]) for (const cross of [-100, 100]) {
     const light = new THREE.PointLight(0xffc87c, 0, 20, 2);
-    light.position.set(road + 4, 4.4, cross + 4); light.castShadow = false;
+    light.position.set(road + 4, 4.4, cross + 4); light.castShadow = false; light.visible = false;
     streetPointLights.push(light); group.add(light);
   }
 }
@@ -289,7 +290,7 @@ let currentPedestrians = [];
 function shouldYield(v) {
   const pose = basePose(v);
   for (const person of currentPedestrians) {
-    if (person.type !== 'villager' || person.group?.visible === false) continue;
+    if (person.type !== 'villager' || person.aiVisible === false) continue;
     const px = person.pos?.x ?? person.group?.position.x;
     const pz = person.pos?.z ?? person.group?.position.z;
     if (!Number.isFinite(px) || !Number.isFinite(pz)) continue;
@@ -404,7 +405,10 @@ function updateLighting(dt) {
     streetBulbMaterial.emissiveIntensity = nightAmount * 3.2;
     streetBulbMaterial.color.setHex(nightAmount > 0.1 ? 0xffe0a0 : 0x77776b);
   }
-  for (const light of streetPointLights) light.intensity = nightAmount * 4.2;
+  for (const light of streetPointLights) {
+    light.visible = nightAmount > 0.02;
+    light.intensity = nightAmount * 4.2;
+  }
   if (beamMaterial) beamMaterial.opacity = nightAmount * 0.32;
 }
 

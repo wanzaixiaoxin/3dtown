@@ -125,7 +125,7 @@ function addGrassPatches(parent) {
     guard++;
     const x = (Math.random() - 0.5) * TOWN.half * 1.85;
     const z = (Math.random() - 0.5) * TOWN.half * 1.85;
-    if (ALL_ROADS.some(road => Math.abs(x - road) < 5.2) || ALL_ROADS.some(road => Math.abs(z - road) < 5.2)) continue;
+    if (ALL_ROADS.some(road => Math.abs(x - road) < 11) || ALL_ROADS.some(road => Math.abs(z - road) < 11)) continue;
     if (Math.sqrt(x * x + z * z) < 11.5) continue;
     if (Math.hypot(x + 16, z - 16) < 8) continue; // pond
     d.position.set(x, 0.15, z);
@@ -148,15 +148,15 @@ function buildRoads(parent) {
   const m = M();
   const R = SCENERY_CFG.roads;
   const L = TOWN.half * 2;
-  const halfWidth = R.width / 2;
-  // main N-S and E-W stone lanes
+  // Central stone pedestrian lanes sit above asphalt; the two asphalt directions
+  // use a small height offset so coplanar intersections cannot flicker.
   const mkLane = (w, len, rotY, name, offset) => {
     const g = trackGeo(new THREE.PlaneGeometry(w, len));
     const lane = new THREE.Mesh(g, offset === 0 ? m.roadStone : m.asphalt);
     lane.rotation.x = -Math.PI / 2; lane.rotation.z = rotY;
     if (rotY === 0) lane.position.x = offset;
     else lane.position.z = offset;
-    lane.position.y = 0.04; lane.receiveShadow = true; lane.name = name;
+    lane.position.y = offset === 0 ? 0.054 : (rotY === 0 ? 0.038 : 0.041); lane.receiveShadow = true; lane.name = name;
     parent.add(lane);
     return lane;
   };

@@ -93,7 +93,8 @@ export function createPost(renderer, scene, camera, quality = 'high') {
   bloom.threshold = 1.08;
   bloom.strength = 0.1;
   bloom.radius = 0.45;
-  if (quality !== 'low') composer.addPass(bloom);
+  bloom.enabled = quality === 'high';
+  composer.addPass(bloom);
 
   // Tone mapping + sRGB
   const output = new OutputPass();
@@ -126,6 +127,7 @@ export function createPost(renderer, scene, camera, quality = 'high') {
       composer.render(dt);
     },
     setSize(nw, nh) {
+      composer.setPixelRatio(renderer.getPixelRatio());
       composer.setSize(nw, nh);
       bloom.setSize(nw, nh);
       if (ssao) ssao.setSize(nw, nh);
@@ -135,7 +137,7 @@ export function createPost(renderer, scene, camera, quality = 'high') {
     setQuality(q) {
       this.quality = q;
       if (ssao) ssao.enabled = (q === 'high');
-      bloom.enabled = (q !== 'low');
+      bloom.enabled = (q === 'high');
     },
     setBloomStrength(s) { bloom.strength = s; },
   };

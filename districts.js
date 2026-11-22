@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { M, trackGeo, disposables } from './materials.js';
+import { batchStatic } from './optimize.js';
+
+const districtDetails = [];
+let districtProxy = null;
 
 export const CITY_ROADS = [-200, -100, 0, 100, 200];
 export const ALL_ROADS = [-240, ...CITY_ROADS, 240];
@@ -60,6 +64,7 @@ function labelTexture(text, color = '#394d58') {
 }
 
 export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseTree, colliders }) {
+  districtDetails.length = 0;
   const m = M();
   const dummy = new THREE.Object3D();
   let activeZone = { x: 0, z: 0 };
@@ -197,27 +202,48 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
   function denseModule(group, zone) {
     const grid = zone.w >= 70 ? 8 : 4;
     const pitch = grid === 8 ? 9 : 4.4;
-    const count = grid * grid;
+    const mode = zone.variant % 4;
+    const lots = [];
+    for (let row = 0; row < grid; row++) for (let col = 0; col < grid; col++) {
+      let used;
+      if (grid === 4) used = !((row === 1 || row === 2) && (col === 1 || col === 2));
+      else if (mode === 0) used = row % 4 !== 3 && col % 4 !== 3; // 四个庭院组团，36栋
+      else if (mode === 1) used = row < 2 || row >= 6 || col < 2 || col >= 6 || ((row === 3 || row === 4) && (col === 3 || col === 4)); // 周边式，32栋
+      else if (mode === 2) used = row % 2 === 0 || col === 0 || col === 7; // 行列式与绿带，40栋
+      else used = !(row >= 2 && row <= 5 && col >= 2 && col <= 5); // 中央公园，48栋
+      if (used) lots.push({ row, col });
+    }
+    const count = lots.length;
+    zone.capacity = grid * grid; zone.buildingCount = count;
     groundBox(group, zone.w, zone.d, mat(0x7c8175), 0, 0);
+    if (grid === 8 && mode === 0) {
+      groundBox(group, zone.w, 3, m.roadStone, 0, 0);
+      groundBox(group, 3, zone.d, m.roadStone, 0, 0);
+    } else if (grid === 8 && mode === 2) {
+      for (const z of [-22.5, -4.5, 13.5]) groundBox(group, zone.w, 2.2, mat(0x668653), 0, z);
+    } else if (grid === 8 && mode === 3) {
+      groundBox(group, 38, 38, mat(0x668653), 0, 0);
+      groundBox(group, 3, 38, m.roadStone, 0, 0);
+    } else if (grid === 4) groundBox(group, 9, 9, mat(0x668653), 0, 0);
     const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88 });
     disposables.materials.push(bodyMaterial);
     const bodies = new THREE.InstancedMesh(trackGeo(new THREE.BoxGeometry(1, 1, 1)), bodyMaterial, count);
     const roofs = new THREE.InstancedMesh(trackGeo(new THREE.ConeGeometry(1, 1, 4)), m.roofBlue, count);
     const colors = [0x9b8d7a, 0x7f9195, 0x9a8175, 0x7e8876, 0x8e8297, 0xa0947e];
-    for (let row = 0; row < grid; row++) for (let col = 0; col < grid; col++) {
-      const i = row * grid + col;
+    lots.forEach(({ row, col }, i) => {
       const x = (col - (grid - 1) / 2) * pitch;
       const z = (row - (grid - 1) / 2) * pitch;
       const height = 4.5 + ((i + zone.variant) % 5) * 1.7;
-      const width = grid === 8 ? 6.7 : 3.8;
+      const width = grid === 8 ? 6.2 : 3.4;
       dummy.position.set(x, height / 2, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(width, height, width); dummy.updateMatrix(); bodies.setMatrixAt(i, dummy.matrix);
       bodies.setColorAt(i, new THREE.Color(colors[(i + zone.variant) % colors.length]));
       dummy.position.y = height + 1.0; dummy.rotation.y = Math.PI / 4; dummy.scale.set(width * 0.72, 2, width * 0.72); dummy.updateMatrix(); roofs.setMatrixAt(i, dummy.matrix);
-    }
+    });
     bodies.instanceMatrix.needsUpdate = roofs.instanceMatrix.needsUpdate = true;
     bodies.instanceColor.needsUpdate = true;
     bodies.castShadow = roofs.castShadow = false; bodies.receiveShadow = roofs.receiveShadow = true;
     group.add(bodies, roofs);
+    group.userData.capacity = zone.capacity; group.userData.buildingCount = count;
     collider(0, 0, zone.w - 3, zone.d - 3, 3, 'house');
   }
 
@@ -295,7 +321,37 @@ export function buildDistricts(parent, { buildHouse: baseHouse, buildTree: baseT
         buildHouse(group, x, z, 5, 4.5, 4.4, { stories: 1, roofMat: m.roofBrown });
       }
     }
+    if (['school', 'police', 'fire', 'workshop'].includes(zone.key) && Math.max(Math.abs(zone.x), Math.abs(zone.z)) < 180) {
+      for (const [x,z] of [[-22,-22],[22,22]]) {
+        buildHouse(group, x, z, 6, 5, 4.4, { stories: 1, roofMat: m.roofGrey, wallMat: m.plasterWarm });
+      }
+    }
     sign(group, zone.label, -zone.w / 2 + 3, -zone.d / 2 + 1.2, zone.color);
+    const worldX = group.position.x, worldZ = group.position.z;
+    group.position.set(0, 0, 0);
+    batchStatic(group);
+    group.position.set(worldX, 0, worldZ);
+    group.traverse(o => { if (o.isMesh) o.userData.noBatch = true; });
+    districtDetails.push(group);
     parent.add(group);
   }
+  const proxyMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 });
+  disposables.materials.push(proxyMaterial);
+  districtProxy = new THREE.InstancedMesh(trackGeo(new THREE.BoxGeometry(1, 1, 1)), proxyMaterial, CITY_ZONES.length);
+  CITY_ZONES.forEach((zone, i) => {
+    const height = zone.key === 'office' ? 22 : zone.key === 'apartment' ? 16 : ['park','farm','farmWest','stadium'].includes(zone.key) ? 0.6 : 9;
+    const width = Math.min(zone.w, zone.key === 'infill' ? 58 : 24);
+    const depth = Math.min(zone.d, zone.key === 'infill' ? 58 : 24);
+    dummy.position.set(zone.x, height / 2, zone.z); dummy.rotation.set(0, 0, 0); dummy.scale.set(width, height, depth); dummy.updateMatrix();
+    districtProxy.setMatrixAt(i, dummy.matrix); districtProxy.setColorAt(i, new THREE.Color(zone.color));
+  });
+  districtProxy.instanceMatrix.needsUpdate = true; districtProxy.instanceColor.needsUpdate = true;
+  districtProxy.visible = false; districtProxy.userData.noBatch = true;
+  parent.add(districtProxy);
+}
+
+export function updateDistrictLOD(camera) {
+  const overview = camera.position.y > 180;
+  for (const group of districtDetails) group.visible = !overview;
+  if (districtProxy) districtProxy.visible = overview;
 }

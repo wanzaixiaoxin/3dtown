@@ -345,7 +345,7 @@ export function buildGrassField(parent) {
     guard++;
     const x = (Math.random() - 0.5) * TOWN * 1.9;
     const z = (Math.random() - 0.5) * TOWN * 1.9;
-    if (ALL_ROADS.some(road => Math.abs(x - road) < 5.2) || ALL_ROADS.some(road => Math.abs(z - road) < 5.2)) continue;
+    if (ALL_ROADS.some(road => Math.abs(x - road) < 11) || ALL_ROADS.some(road => Math.abs(z - road) < 11)) continue;
     if (Math.hypot(x, z) < 11.5) continue;
     if (Math.hypot(x + 16, z - 16) < 8) continue;
     if (inPlot(x, z, 1)) continue;

@@ -11,12 +11,12 @@ import {
   buildWorld, setupEnvironment, applyTime, getExposure, getTimeLabel, getNightAmount,
   setEnvMaps, setWeatherMode, setFogEnabled,
 } from './world.js';
-import { spawnNPCs, updateNPCs, npcs, applyGait } from './npc.js';
+import { spawnNPCs, updateNPCs, updateNPCVisibility, npcs, applyGait } from './npc.js';
 import { updateWind, windUniforms, updateWaterfall, updateBoats, updateMist, updateRain, setRain } from './scenery.js';
 import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
-import { CITY_ZONES } from './districts.js';
+import { CITY_ZONES, updateDistrictLOD } from './districts.js';
 import { buildTraffic, updateTraffic, trafficStats } from './traffic.js';
 import {
   initBuilder, enterBuilder, exitBuilder, isBuilderEnabled,
@@ -40,14 +40,18 @@ function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
 
+function targetPixelRatio() {
+  if (settings.comfort) return Math.min(window.devicePixelRatio, 1.5);
+  const cap = settings.quality === 'high' ? 1.25 : settings.quality === 'medium' ? 0.85 : 0.75;
+  return Math.min(window.devicePixelRatio, cap);
+}
+
 // ---------------------------------------------------------------------------
 //  COMFORT MODE (防眩晕) — sharper picture, zero camera lag, no grain/vignette.
 //  Applied on toggle and at boot; manual FOV slider changes still win after.
 // ---------------------------------------------------------------------------
 function applyComfort(on) {
   settings.comfort = on;
-  // 1) sharper picture: allow up to 1.5x device pixel ratio instead of hard 1x
-  renderer.setPixelRatio(on ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 1));
   onResize();
   // 2) no film grain / vignette (biggest flicker offenders)
   if (post?.grade) {
@@ -167,7 +171,7 @@ async function init() {
 
 function initRenderer() {
   renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+  renderer.setPixelRatio(targetPixelRatio());
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.autoUpdate = false;
@@ -278,6 +282,7 @@ function bindUI() {
     const label = { high: '高', medium: '中', low: '低' }[q] || q;
     if (qval) qval.textContent = label;
     saveSettings();
+    onResize();
   }
   qbtns.forEach(b => b.addEventListener('click', () => applyQuality(b.dataset.quality)));
   applyQuality(settings.quality);
@@ -712,6 +717,8 @@ function animate() {
 
   updatePlayer(dt);
   updateNPCs(dt, getNightAmount());
+  updateNPCVisibility(camera);
+  updateDistrictLOD(camera);
   updateTraffic(dt, npcs, getNightAmount());
   updateWind(clock.elapsedTime);
   updateWaterfall(dt);
@@ -731,7 +738,7 @@ function animate() {
 function onResize() {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+  renderer.setPixelRatio(targetPixelRatio());
   renderer.setSize(w, h);
   if (post) { post.setSize(w, h); }
 }
