@@ -8,7 +8,8 @@ import { M, trackGeo, disposables } from './materials.js';
 import { batchStatic } from './optimize.js';
 import { instantiate } from './assets.js';
 import { SHOPS, buildCommerce } from './commerce.js';
-import { ALL_ROADS, buildDistricts } from './districts.js';
+import { ALL_ROADS, CITY_ROADS, buildDistricts, buildInterchange } from './districts.js';
+import { windowVariant, getWindowVariants, setCommercialGlowHook, updateCommercialGlow } from './glow.js';
 import {
   buildGrassField, buildFlowerBed, buildWillow, buildAnimatedPond,
   buildPavilion, buildRockery, buildGarden, buildBush, flushFlowers,
@@ -22,27 +23,7 @@ const BUILD_CFG = CONFIG.buildings;
 const SCENERY_CFG = CONFIG.scenery;
 const ENV_CFG = CONFIG.environment;
 
-// ---- 窗灯错落：少量共享材质变体，避免每扇窗一个材质（控制 draw call）----
-const WINDOW_VARIANTS = [];
-function initWindowVariants() {
-  if (WINDOW_VARIANTS.length) return WINDOW_VARIANTS;
-  const base = M().windowLit;
-  const defs = ENV_CFG.emissive?.windowLit?.variants || [{ threshold: 0, brightness: 1 }];
-  for (const def of defs) {
-    const mat = base.clone();
-    mat.name = `windowLit-${WINDOW_VARIANTS.length}`;
-    mat.userData.threshold = def.threshold ?? 0;
-    mat.userData.brightness = def.brightness ?? 1;
-    WINDOW_VARIANTS.push(mat);
-    disposables.materials.push(mat);
-  }
-  return WINDOW_VARIANTS;
-}
-function windowVariant(x, z, floor, wx) {
-  const list = initWindowVariants();
-  const seed = Math.abs(Math.round((x * 31.7 + z * 17.3 + floor * 7.1 + wx * 53.3) * 10));
-  return list[seed % list.length];
-}
+export { windowVariant, getWindowVariants, setCommercialGlowHook } from './glow.js';
 
 export const TOWN = { half: TOWN_CFG.half };        // playable half-size (from config)
 export const colliders = [];             // {minX,maxX,minZ,maxZ,top,climbable?}
@@ -168,6 +149,35 @@ function buildRoads(parent) {
       { type: 'v', offset, half: width / 2 },
       { type: 'h', offset, half: width / 2 },
     );
+  }
+
+  // 主干道中央绿化隔离带（±100/±200，避开路口 22m）：草带，C:S 式大道仪式感
+  const MED = CITY_ROADS.filter(r => r !== 0);
+  const medianSegs = [];
+  const cuts = [-260, ...ALL_ROADS, 260].sort((a, b) => a - b);
+  for (const road of MED) {
+    for (const axis of ['v', 'h']) {
+      for (let ci = 0; ci < cuts.length - 1; ci++) {
+        const start = cuts[ci] + 22, end = cuts[ci + 1] - 22;
+        const len = end - start;
+        if (len <= 4) continue;
+        const mid = (start + end) / 2;
+        medianSegs.push(axis === 'v' ? [road, mid, 1.6, len] : [mid, road, len, 1.6]);
+      }
+    }
+  }
+  if (medianSegs.length) {
+    const geo = trackGeo(new THREE.BoxGeometry(1, 0.12, 1));
+    const inst = new THREE.InstancedMesh(geo, m.grassDark, medianSegs.length);
+    const md = new THREE.Object3D();
+    medianSegs.forEach(([mx, mz, mw, ml], idx) => {
+      md.position.set(mx, 0.06, mz); md.rotation.set(0, 0, 0);
+      md.scale.set(mw, 1, ml); md.updateMatrix();
+      inst.setMatrixAt(idx, md.matrix);
+    });
+    inst.instanceMatrix.needsUpdate = true;
+    inst.receiveShadow = true; inst.name = 'roadMedians';
+    parent.add(inst);
   }
 
   // central plaza
@@ -757,7 +767,7 @@ export function applyTime(key, instant = true) {
     const t = Math.min(1, Math.max(0, (v - a) / (b - a || 1)));
     return t * t * (3 - 2 * t);
   };
-  for (const mat of WINDOW_VARIANTS) {
+  for (const mat of getWindowVariants()) {
     const lit = smooth(mat.userData.threshold, mat.userData.threshold + 0.32, na);
     mat.emissiveIntensity = (EM.windowLit.base + lit * EM.windowLit.scale) * mat.userData.brightness;
     mat.color.setHex(color(lit > 0.5 ? EM.windowLit.nightColor : EM.windowLit.dayColor));
@@ -766,6 +776,12 @@ export function applyTime(key, instant = true) {
   m.windowLit.color.setHex(color(na > 0.5 ? EM.windowLit.nightColor : EM.windowLit.dayColor));
   m.lantern.emissiveIntensity = EM.lantern.base + na * EM.lantern.scale;
   m.lampGlow.emissiveIntensity = EM.lampGlow.base + na * EM.lampGlow.scale;
+
+  // 现代商业体泛光由独立 glow 模块统一联动
+  try {
+    updateCommercialGlow(na);
+  } catch (e) { /* districts 未加载时忽略 */ }
+
 
   // night point lights
   for (const L of env.nightLights) L.intensity = na * L.userData.baseIntensity;
@@ -862,13 +878,15 @@ function buildPlotPad(parent) {
 }
 
 export function buildWorld(scene, assets = null) {
+  const T0 = performance.now();
+  const stage = (name) => console.log('[buildWorld]', name, Math.round(performance.now() - T0) + 'ms');
   world = new THREE.Group();
   world.name = 'world';
   scene.add(world);
 
-  buildGround(world);
-  buildRoads(world);
-  buildPlotPad(world);
+  buildGround(world); stage('ground');
+  buildRoads(world); stage('roads');
+  buildPlotPad(world); stage('buildPlotPad');
   // NOTE: the plaza well is replaced by a downloaded FBX well in placeAssets().
 
   // --- residential blocks: orient houses to face the main streets ---
@@ -927,7 +945,10 @@ export function buildWorld(scene, assets = null) {
     buildHouse(world, ...def);
   }
 
-  buildDistricts(world, { buildHouse, buildTree, colliders, assets });
+  buildDistricts(world, { buildHouse, buildTree, colliders, assets }); stage('buildDistricts');
+  // 两座苜蓿叶立交（±100,±100 与 -100,100 路口），东西向上跨
+  buildInterchange(world, 100, 100); stage('buildInterchange');
+  buildInterchange(world, -100, -100); stage('buildInterchange');
 
   // --- pavilion on the plaza east edge (two-tier) ---
   const PV = BUILD_CFG.pavilion;
@@ -985,6 +1006,26 @@ export function buildWorld(scene, assets = null) {
     if (blockedTree(x, z)) return;
     buildTree(world, x, z, TS.base + (i % TS.cycle) * TS.step);
   });
+  // 成团树林（C:S 风）：8 个高斯簇，每簇 6-10 棵，簇心避开道路/地坪
+  const CLUSTERS = SCENERY_CFG.treeClusters || 8;
+  let clustersPlaced = 0, clusterGuard = 0;
+  while (clustersPlaced < CLUSTERS && clusterGuard < CLUSTERS * 40) {
+    clusterGuard++;
+    const cx = (Math.random() - 0.5) * TOWN.half * 1.7;
+    const cz = (Math.random() - 0.5) * TOWN.half * 1.7;
+    if (Math.abs(cx) > 215 || Math.abs(cz) > 215) continue;
+    if (ALL_ROADS.some(road => Math.abs(cx - road) < 20 || Math.abs(cz - road) < 20)) continue;
+    if (blockedTree(cx, cz)) continue;
+    const n = 6 + Math.floor(Math.random() * 5);
+    for (let t = 0; t < n; t++) {
+      // 高斯偏移：聚集在簇心附近
+      const gx = cx + (Math.random() + Math.random() + Math.random() - 1.5) * 9;
+      const gz = cz + (Math.random() + Math.random() + Math.random() - 1.5) * 9;
+      if (blockedTree(gx, gz)) continue;
+      buildTree(world, gx, gz, TS.base + Math.random() * TS.cycle * TS.step);
+    }
+    clustersPlaced++;
+  }
 
   // --- street lamps along the lanes ---
   SCENERY_CFG.lampPositions.forEach(([x, z]) => {
@@ -1003,10 +1044,10 @@ export function buildWorld(scene, assets = null) {
   });
 
   // --- placed third-party FBX assets (well, hero houses, windmill, trees...) ---
-  if (assets) placeAssets(world, assets);
+  if (assets) placeAssets(world, assets); stage('if ');
 
   // --- RICH SCENERY: 由 scenery.calls 声明式调度，新增景观只改 JSON ---
-  buildGrassField(world);
+  buildGrassField(world); stage('buildGrassField');
 
   const dispatch = {
     pond: a => buildAnimatedPond(world, ...a),

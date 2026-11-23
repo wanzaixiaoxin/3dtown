@@ -16,7 +16,7 @@ import { updateWind, windUniforms, updateWaterfall, updateBoats, updateMist, upd
 import { preloadAssets, mixers } from './assets.js';
 import { loadPBRTextures, loadHDRIOne, HDRI_FILES } from './textures.js';
 import { createPost } from './postprocessing.js';
-import { CITY_ZONES, updateDistrictLOD } from './districts.js';
+import { CITY_ZONES, updateDistrictLOD, setZonePlanMode, isZonePlanMode } from './districts.js';
 import { buildTraffic, updateTraffic, trafficStats } from './traffic.js';
 import {
   initBuilder, enterBuilder, exitBuilder, isBuilderEnabled,
@@ -330,6 +330,7 @@ function bindUI() {
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
     if (e.code === 'KeyV' && !isBuilderEnabled()) toggleView();
+    if (e.code === 'KeyM' && !isBuilderEnabled()) setZonePlanMode(!isZonePlanMode());
     if (e.code === 'KeyB') toggleBuilder();
     if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
   });

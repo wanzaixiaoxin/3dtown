@@ -423,8 +423,22 @@ export function updateTraffic(dt, pedestrians = [], night = 0) {
   currentPedestrians = pedestrians;
   targetNight = night;
   trafficTime += dt; updateSignals(); updateLighting(dt);
-  for (const v of vehicles) updateVehicleState(v, dt);
+  // 车流潮汐：夜间只保留 35% 车辆在路（傍晚 70%、白天 100%），多余的休眠
+  const ratio = 1 - night * 0.65;
+  const allowed = Math.round(vehicles.length * ratio);
+  let activeSeen = 0;
+  for (const v of vehicles) {
+    if (v.active) {
+      activeSeen++;
+      if (activeSeen > allowed && !v.turn) { sleepVehicle(v); continue; }
+    }
+    updateVehicleState(v, dt);
+  }
   renderVehicles(dt);
+}
+
+function sleepVehicle(v) {
+  v.active = false; v.speed = 0; v.turn = null; v.respawnT = 6 + Math.random() * 10;
 }
 
 export function trafficStats() {
